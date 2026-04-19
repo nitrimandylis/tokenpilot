@@ -7,12 +7,28 @@ import Stat from "@/components/Stat";
 import Row from "@/components/Row";
 import VendorBadge from "@/components/VendorBadge";
 import MonthPicker from "@/components/MonthPicker";
+import { CountUp } from "@/components/motion/CountUp";
 import { $, T, P } from "@/lib/formatters";
 import { storage, Vendor } from "@/lib/storage";
 import type { Report } from "@/types";
 import { useApiKey } from "@/contexts/ApiKeyContext";
 
 type FilterType = "all" | "critical" | "warning" | "info";
+
+const monthNames = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
 
 function RecommendationsPageContent() {
   const searchParams = useSearchParams();
@@ -376,8 +392,10 @@ function RecommendationsPageContent() {
             setIsFetching(false);
             router.refresh();
           }
-        } catch (error: any) {
-          setFetchError(error.message || "Failed to fetch data");
+        } catch (error: unknown) {
+          setFetchError(
+            error instanceof Error ? error.message : "Failed to fetch data"
+          );
           setIsFetching(false);
         }
       };
@@ -403,27 +421,13 @@ function RecommendationsPageContent() {
   }
 
   if (isFetching) {
-    const monthNames = [
-      "January",
-      "February",
-      "March",
-      "April",
-      "May",
-      "June",
-      "July",
-      "August",
-      "September",
-      "October",
-      "November",
-      "December",
-    ];
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh]">
         <div className="relative mb-8">
           {/* Background illustration */}
           <div className="absolute inset-0 flex items-center justify-center">
             <svg
-              className="w-32 h-32 text-slate-800/40"
+              className="w-32 h-32 text-ink-border/40"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -437,12 +441,12 @@ function RecommendationsPageContent() {
             </svg>
           </div>
           {/* Spinner */}
-          <div className="relative w-16 h-16 border-4 border-emerald-500/20 border-t-emerald-400 rounded-full animate-spin" />
+          <div className="relative w-16 h-16 border-4 border-moss/20 border-t-moss rounded-full animate-spin" />
         </div>
-        <p className="text-base text-slate-300 font-semibold mb-2">
+        <p className="text-base text-bone font-medium mb-2">
           Analyzing {monthNames[month]} {year}
         </p>
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-bone-subtle">
           Fetching usage data and running optimization analysis...
         </p>
       </div>
@@ -451,11 +455,11 @@ function RecommendationsPageContent() {
 
   if (fetchError) {
     return (
-      <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-6">
-        <p className="text-sm text-red-400">{fetchError}</p>
+      <div className="rounded-sm border border-critical/30 bg-critical/5 p-6">
+        <p className="text-sm text-bone-muted">{fetchError}</p>
         <Link
           href="/"
-          className="mt-4 inline-block text-sm text-emerald-400 hover:text-emerald-300"
+          className="mt-4 inline-block text-sm text-moss hover:text-moss-light"
         >
           ← Back to home
         </Link>
@@ -465,28 +469,13 @@ function RecommendationsPageContent() {
 
   if (!monthData || !r) {
     return (
-      <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-6">
-        <p className="text-sm text-slate-400">
+      <div className="rounded-sm border border-ink-border bg-ink-elevated p-6">
+        <p className="text-sm text-bone-muted">
           No data for {year}-{String(month + 1).padStart(2, "0")}
         </p>
       </div>
     );
   }
-
-  const monthNames = [
-    "January",
-    "February",
-    "March",
-    "April",
-    "May",
-    "June",
-    "July",
-    "August",
-    "September",
-    "October",
-    "November",
-    "December",
-  ];
 
   const mxW = r ? Math.max(...r.wss.map((w) => w.spend), 1) : 1;
   const wColors = [
@@ -506,17 +495,17 @@ function RecommendationsPageContent() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <VendorBadge vendor={analysisRecord.vendor} size="small" />
-          <span className="text-sm text-slate-300 font-medium">
+          <span className="text-sm text-bone font-medium">
             {analysisRecord.orgName}
           </span>
         </div>
         <button
           onClick={() => setForceRefresh(true)}
           disabled={isFetching}
-          className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${
+          className={`text-xs font-medium px-3 py-1.5 rounded-sm transition-colors ${
             isFetching
-              ? "text-slate-600 cursor-not-allowed"
-              : "text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 cursor-pointer"
+              ? "text-bone-subtle cursor-not-allowed"
+              : "text-moss hover:bg-ink-elevated cursor-pointer"
           }`}
           title="Refresh data from API"
         >
@@ -525,31 +514,31 @@ function RecommendationsPageContent() {
       </div>
 
       {/* Tab Switcher */}
-      <div className="flex items-center gap-1 border-b border-slate-800">
+      <div className="flex items-center gap-1 border-b border-ink-border">
         <Link
           href={`/history/${id}/recommendations?year=${year}&month=${month}`}
-          className="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px border-emerald-500 text-slate-200"
+          className="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px border-moss text-bone"
         >
           Recommendations
         </Link>
         <Link
           href={`/history/${id}/analytics?year=${year}`}
-          className="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px border-transparent text-slate-500 hover:text-slate-400"
+          className="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px border-transparent text-bone-subtle hover:text-bone"
         >
           Analytics
         </Link>
         <Link
           href={`/history/${id}/raw-data?year=${year}&month=${month}`}
-          className="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px border-transparent text-slate-500 hover:text-slate-400"
+          className="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px border-transparent text-bone-subtle hover:text-bone"
         >
-          Raw API Data
+          Raw data
         </Link>
       </div>
 
       {/* Month Navigation */}
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wide">
-          Monthly Analysis
+        <h3 className="text-sm font-semibold text-bone-subtle">
+          Monthly analysis
         </h3>
         <div className="flex items-center gap-3">
           <button
@@ -560,7 +549,7 @@ function RecommendationsPageContent() {
                 `/history/${id}/recommendations?year=${newYear}&month=${newMonth}`
               );
             }}
-            className="p-1.5 text-slate-500 hover:text-emerald-400 cursor-pointer transition-colors rounded hover:bg-slate-800/50"
+            className="p-1.5 text-bone-subtle hover:text-bone cursor-pointer transition-colors rounded hover:bg-ink-elevated"
             title="Previous month"
           >
             <svg
@@ -580,7 +569,7 @@ function RecommendationsPageContent() {
 
           <button
             onClick={() => setShowMonthPicker(true)}
-            className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-300 hover:text-slate-200 cursor-pointer rounded-lg hover:bg-slate-800/50 transition-colors"
+            className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-bone hover:bg-ink-elevated cursor-pointer rounded-sm transition-colors"
             title="Select month"
           >
             <svg
@@ -616,11 +605,11 @@ function RecommendationsPageContent() {
               year === new Date().getFullYear() &&
               month === new Date().getMonth()
             }
-            className={`p-1.5 transition-colors rounded hover:bg-slate-800/50 ${
+            className={`p-1.5 transition-colors rounded hover:bg-ink-elevated ${
               year === new Date().getFullYear() &&
               month === new Date().getMonth()
-                ? "text-slate-700 cursor-not-allowed"
-                : "text-slate-500 hover:text-emerald-400 cursor-pointer"
+                ? "text-bone-subtle/30 cursor-not-allowed"
+                : "text-bone-subtle hover:text-bone cursor-pointer"
             }`}
             title="Next month"
           >
@@ -641,7 +630,7 @@ function RecommendationsPageContent() {
 
           {(year !== new Date().getFullYear() ||
             month !== new Date().getMonth()) && (
-            <div className="w-px h-4 bg-slate-700 mx-1" />
+            <div className="w-px h-4 bg-ink-border mx-1" />
           )}
 
           {(year !== new Date().getFullYear() ||
@@ -653,7 +642,7 @@ function RecommendationsPageContent() {
                   `/history/${id}/recommendations?year=${now.getFullYear()}&month=${now.getMonth()}`
                 );
               }}
-              className="text-xs font-semibold text-emerald-400 hover:text-emerald-300 px-2 py-1 rounded hover:bg-emerald-500/10 cursor-pointer transition-colors"
+              className="text-xs font-semibold text-moss hover:text-moss-light px-2 py-1 rounded hover:bg-ink-elevated cursor-pointer transition-colors"
             >
               Jump to Current
             </button>
@@ -661,8 +650,35 @@ function RecommendationsPageContent() {
         </div>
       </div>
 
+      {/* Savings title band */}
+      <div className="rounded-sm bg-ink-elevated border border-ink-border px-6 py-5">
+        <p className="text-xs text-bone-subtle font-sans mb-1">
+          {monthNames[month]} {year} · {analysisRecord.orgName}
+        </p>
+        <div className="flex items-baseline gap-3">
+          <span
+            className="font-display text-4xl font-bold text-bone"
+            style={{ letterSpacing: "-0.03em" }}
+          >
+            You could save
+          </span>
+          <CountUp
+            value={r.savings}
+            prefix="$"
+            suffix="/mo"
+            decimals={0}
+            className="font-display text-4xl font-bold text-moss-light"
+          />
+        </div>
+        {r.savings > 0 && (
+          <p className="text-xs text-bone-subtle mt-1">
+            {P(r.savings, r.spend)}% of current {$(r.spend)}/mo spend
+          </p>
+        )}
+      </div>
+
       {/* Stats */}
-      <div className="flex flex-wrap justify-between gap-y-6 rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
+      <div className="flex flex-wrap justify-between gap-y-6 rounded-sm border border-ink-border bg-ink-elevated p-6">
         <Stat
           label="Monthly Spend"
           value={$(r.spend)}
@@ -691,9 +707,9 @@ function RecommendationsPageContent() {
       {r.findings.length > 0 ? (
         <div>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-bold text-slate-300">
-              Optimization Recommendations{" "}
-              <span className="ml-2 text-xs font-normal text-slate-500">
+            <h2 className="text-sm font-semibold text-bone">
+              Recommendations{" "}
+              <span className="ml-2 text-xs font-normal text-bone-subtle">
                 {filteredRecommendations.length} shown · {$(r.savings)}/mo total
               </span>
             </h2>
@@ -707,10 +723,10 @@ function RecommendationsPageContent() {
                 <button
                   key={k}
                   onClick={() => setFilter(k as FilterType)}
-                  className={`px-2.5 py-1 rounded-md text-[10px] font-semibold transition-colors cursor-pointer ${
+                  className={`px-2.5 py-1 rounded-sm text-[10px] font-medium transition-colors cursor-pointer ${
                     filter === k
-                      ? "bg-slate-700 text-slate-200"
-                      : "text-slate-500 hover:text-slate-400"
+                      ? "bg-ink-elevated text-bone border border-ink-border"
+                      : "text-bone-subtle hover:text-bone"
                   }`}
                 >
                   {l}
@@ -750,11 +766,11 @@ function RecommendationsPageContent() {
               const { title, message } = emptyMessages[filter];
 
               return (
-                <div className="rounded-2xl border border-slate-800 bg-slate-900/30 p-12 text-center">
+                <div className="rounded-sm border border-ink-border bg-ink-elevated p-12 text-center">
                   <div className="max-w-md mx-auto">
-                    <div className="w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mx-auto mb-4">
+                    <div className="w-16 h-16 rounded-full bg-moss/10 border border-moss/20 flex items-center justify-center mx-auto mb-4">
                       <svg
-                        className="w-8 h-8 text-emerald-400"
+                        className="w-8 h-8 text-moss"
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"
@@ -767,10 +783,10 @@ function RecommendationsPageContent() {
                         />
                       </svg>
                     </div>
-                    <h3 className="text-lg font-bold text-slate-200 mb-2">
+                    <h3 className="text-lg font-bold text-bone mb-2">
                       {title}
                     </h3>
-                    <p className="text-sm text-slate-400">{message}</p>
+                    <p className="text-sm text-bone-subtle">{message}</p>
                   </div>
                 </div>
               );
@@ -834,24 +850,22 @@ function RecommendationsPageContent() {
                 {sortedWorkspaces.map((ws) => (
                   <div key={ws} className="space-y-2">
                     {/* Workspace header */}
-                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-800/40 border border-slate-700/50">
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-sm bg-ink-elevated border border-ink-border">
                       <div className="flex items-center gap-2">
                         <div
-                          className={`w-2 h-2 rounded-full ${workspaceColors[ws] || "bg-slate-500"}`}
+                          className={`w-2 h-2 rounded-full ${workspaceColors[ws] || "bg-bone-subtle"}`}
                         />
-                        <h3 className="text-xs font-bold text-slate-300">
-                          {ws}
-                        </h3>
+                        <h3 className="text-xs font-bold text-bone">{ws}</h3>
                       </div>
                       <div className="flex-1" />
-                      <span className="text-xs text-slate-400">
+                      <span className="text-xs text-bone-subtle">
                         {$(workspaceSpend[ws] || 0)}/mo spend
                       </span>
-                      <span className="text-xs text-slate-600">·</span>
-                      <span className="text-xs text-emerald-400 font-semibold">
+                      <span className="text-xs text-bone-subtle">·</span>
+                      <span className="text-xs text-moss-light font-semibold font-mono">
                         {$(workspaceSavings[ws])}/mo recoverable
                       </span>
-                      <span className="text-[10px] text-slate-500">
+                      <span className="text-[10px] text-bone-subtle">
                         {recommendationsByWorkspace[ws].length} recommendation
                         {recommendationsByWorkspace[ws].length !== 1 ? "s" : ""}
                       </span>
@@ -877,11 +891,14 @@ function RecommendationsPageContent() {
           })()}
         </div>
       ) : (
-        <div className="rounded-2xl border border-emerald-500/15 bg-emerald-500/[0.03] p-8 text-center">
-          <p className="text-lg font-bold text-emerald-400">
+        <div className="rounded-sm border border-moss/20 bg-moss/[0.03] p-8 text-center">
+          <p
+            className="text-lg font-semibold text-bone font-display"
+            style={{ letterSpacing: "-0.02em" }}
+          >
             No major waste patterns detected
           </p>
-          <p className="text-sm text-slate-400 mt-2">
+          <p className="text-sm text-bone-subtle mt-2">
             Usage is well-optimized or spend is below analysis thresholds
             ($0.50/mo minimum).
           </p>
@@ -910,8 +927,8 @@ export default function RecommendationsPage() {
     <Suspense
       fallback={
         <div className="flex flex-col items-center pt-24">
-          <div className="w-8 h-8 border-2 border-emerald-500/30 border-t-emerald-400 rounded-full animate-spin mb-6" />
-          <p className="text-sm text-slate-300 font-medium">Loading...</p>
+          <div className="w-8 h-8 border-2 border-moss/30 border-t-moss rounded-full animate-spin mb-6" />
+          <p className="text-sm text-bone font-medium">Loading...</p>
         </div>
       }
     >
