@@ -97,23 +97,16 @@ function RecommendationsPageContent() {
 
     // If forceRefresh is true, clear the cache for this month
     if (forceRefresh) {
-      console.log(`[Refresh] Clearing cached data for ${year}-${month}`);
       storage.clearMonthData(id, year, month);
       setForceRefresh(false);
       // After clearing, the next check will see no data and fetch
     }
 
     const hasData = storage.hasMonthData(id, year, month);
-    console.log(`[Refresh] hasData for ${year}-${month}:`, hasData);
 
     if (!hasData) {
       // Try to fetch this month's data
       const apiKey = getKey(analysisRecord.vendor);
-
-      console.log(
-        `Month ${year}-${month} not cached for ${analysisRecord.vendor}. API key available:`,
-        !!apiKey
-      );
 
       if (!apiKey) {
         // No API key in sessionStorage - show error
@@ -124,7 +117,6 @@ function RecommendationsPageContent() {
       }
 
       // We have an API key - fetch the data
-      console.log(`Fetching ${year}-${month} for ${analysisRecord.vendor}...`);
       setIsFetching(true);
       setFetchError(null);
 
@@ -306,18 +298,10 @@ function RecommendationsPageContent() {
               }
             }
 
-            console.log(
-              "[Analysis Page] Project spend before mapping:",
-              projectSpend
-            );
-            console.log("[Analysis Page] Project names:", projectNames);
-
             const wss = Object.values(projectSpend)
               .map((p) => ({ ...p, name: projectNames[p.id] || p.id }))
               .sort((a, b) => b.spend - a.spend)
               .slice(0, 10);
-
-            console.log("[Analysis Page] Final wss:", wss);
 
             // Calculate total spend from project spend to ensure they match
             // This avoids discrepancies between Costs API and Usage API
