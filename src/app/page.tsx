@@ -381,7 +381,13 @@ function HomeContent() {
 
                 {/* API key input + Analyze button */}
                 <div className="mt-0 flex gap-2 w-full max-w-lg">
+                  <label htmlFor="api-key-input" className="sr-only">
+                    {vendor === Vendor.OPENAI
+                      ? "OpenAI Admin API Key"
+                      : "Anthropic Admin API Key"}
+                  </label>
                   <input
+                    id="api-key-input"
                     ref={inputRef}
                     type="password"
                     value={key}
@@ -419,7 +425,11 @@ function HomeContent() {
 
                 {/* Error display */}
                 {err && (
-                  <div className="mt-6 w-full max-w-lg rounded-sm border border-critical/30 bg-critical/5 p-4 text-left">
+                  <div
+                    role="alert"
+                    aria-live="assertive"
+                    className="mt-6 w-full max-w-lg rounded-sm border border-critical/30 bg-critical/5 p-4 text-left"
+                  >
                     <p className="text-xs font-semibold mb-1 text-critical">
                       Connection error
                     </p>
@@ -432,35 +442,33 @@ function HomeContent() {
             </FadeUp>
 
             {/* Feature cards */}
-            <StaggerChildren>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-16 w-full max-w-2xl">
-                {[
-                  {
-                    t: "Find hidden waste in 60 seconds",
-                    d: "Instantly identifies overpriced models, bloated RAG contexts, missing cache configs, and batch API opportunities most teams miss.",
-                  },
-                  {
-                    t: "Smart recommendations, not guesses",
-                    d: "Weighted confidence scoring analyzes 5+ signals per finding. Only shows optimizations proven to work across production workloads.",
-                  },
-                  {
-                    t: "Real savings, conservative estimates",
-                    d: "Calculated from your actual token volumes, not theoretical benchmarks. High-confidence wins highlighted first.",
-                  },
-                ].map((f, i) => (
-                  <div
-                    key={i}
-                    className="rounded-sm border border-ink-border bg-ink-elevated p-5"
-                  >
-                    <h3 className="text-sm font-semibold text-bone font-sans">
-                      {f.t}
-                    </h3>
-                    <p className="mt-1.5 text-xs text-bone-subtle leading-relaxed font-sans">
-                      {f.d}
-                    </p>
-                  </div>
-                ))}
-              </div>
+            <StaggerChildren className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-16 w-full max-w-2xl">
+              {[
+                {
+                  t: "Find hidden waste in 60 seconds",
+                  d: "Instantly identifies overpriced models, bloated RAG contexts, missing cache configs, and batch API opportunities most teams miss.",
+                },
+                {
+                  t: "Smart recommendations, not guesses",
+                  d: "Weighted confidence scoring analyzes 5+ signals per finding. Only shows optimizations proven to work across production workloads.",
+                },
+                {
+                  t: "Real savings, conservative estimates",
+                  d: "Calculated from your actual token volumes, not theoretical benchmarks. High-confidence wins highlighted first.",
+                },
+              ].map((f, i) => (
+                <div
+                  key={i}
+                  className="rounded-sm border border-ink-border bg-ink-elevated p-5"
+                >
+                  <h3 className="text-sm font-semibold text-bone font-sans">
+                    {f.t}
+                  </h3>
+                  <p className="mt-1.5 text-xs text-bone-subtle leading-relaxed font-sans">
+                    {f.d}
+                  </p>
+                </div>
+              ))}
             </StaggerChildren>
           </div>
         ) : (

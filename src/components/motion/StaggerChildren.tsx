@@ -8,6 +8,7 @@ interface StaggerChildrenProps {
   children: React.ReactNode;
   staggerDelay?: number;
   initialDelay?: number;
+  className?: string;
 }
 
 const containerVariants = (
@@ -36,11 +37,12 @@ export function StaggerChildren({
   children,
   staggerDelay = 0.07,
   initialDelay = 0,
+  className,
 }: StaggerChildrenProps) {
   const reduced = useReducedMotion();
 
   if (reduced) {
-    return <>{children}</>;
+    return <div className={className}>{children}</div>;
   }
 
   return (
@@ -48,6 +50,7 @@ export function StaggerChildren({
       variants={containerVariants(staggerDelay, initialDelay)}
       initial="hidden"
       animate="visible"
+      className={className}
     >
       {React.Children.toArray(children).map((child, i) => (
         <motion.div key={i} variants={itemVariants}>
