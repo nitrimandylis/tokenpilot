@@ -33,11 +33,61 @@
   --radius-4xl: 2rem;
 
   --container-2xl: 40rem;
+
+  /* Ink+Moss color palette */
+  --color-ink: #14100f;
+  --color-ink-elevated: #1a1614;
+  --color-ink-border: #2a2220;
+  --color-bone: #ede4d3;
+  --color-bone-muted: #c4b8a7;
+  --color-bone-subtle: #8f827a;
+  --color-moss: #4e7a3e;
+  --color-moss-light: #7ead6a;
+  --color-critical: #c44536;
+  --color-warning: #d4a03a;
+  --color-info: #6b8cb8;
+
+  /* Font family vars */
+  --font-clash: "ClashDisplay", sans-serif;
+  --font-satoshi: "Satoshi", sans-serif;
+  --font-mono: "JetBrainsMono", monospace;
+
+  /* Shadcn CSS variable remapping */
+  --background: #14100f;
+  --foreground: #ede4d3;
+  --card: #1a1614;
+  --card-foreground: #ede4d3;
+  --popover: #1a1614;
+  --popover-foreground: #ede4d3;
+  --primary: #4e7a3e;
+  --primary-foreground: #ede4d3;
+  --secondary: #1a1614;
+  --secondary-foreground: #c4b8a7;
+  --muted: #1a1614;
+  --muted-foreground: #8f827a;
+  --accent: #4e7a3e;
+  --accent-foreground: #ede4d3;
+  --destructive: #c44536;
+  --border: #2a2220;
+  --input: #2a2220;
+  --ring: #4e7a3e;
+
+  /* Marquee animation */
+  --animate-marquee: marquee 30s linear infinite;
+  @keyframes marquee {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(-50%);
+    }
+  }
 }
 
-/* Dark mode body styles */
+/* Body styles */
 body {
-  @apply bg-slate-950 text-slate-100;
+  background-color: var(--color-ink);
+  color: var(--color-bone);
 }
 
 /* Custom scrollbar styling */
@@ -47,19 +97,20 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  @apply bg-slate-900;
+  background-color: var(--color-ink-elevated);
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-slate-700 rounded-full;
+  background-color: var(--color-ink-border);
+  border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  @apply bg-slate-600;
+  background-color: var(--color-bone-subtle);
 }
 
 /* Firefox scrollbar */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgb(51 65 85) rgb(15 23 42);
+  scrollbar-color: #2a2220 #1a1614;
 }
