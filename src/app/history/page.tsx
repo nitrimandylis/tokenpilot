@@ -10,6 +10,21 @@ import Header from "@/components/Header";
 import VendorBadge from "@/components/VendorBadge";
 import Footer from "@/components/Footer";
 
+const monthNames = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
+
 export default function HistoryPage() {
   const router = useRouter();
   const [analyses, setAnalyses] = useState<AnalysisRecord[]>([]);
@@ -19,21 +34,6 @@ export default function HistoryPage() {
     setMounted(true);
     setAnalyses(storage.getAllAnalyses());
   }, []);
-
-  const monthNames = [
-    "January",
-    "February",
-    "March",
-    "April",
-    "May",
-    "June",
-    "July",
-    "August",
-    "September",
-    "October",
-    "November",
-    "December",
-  ];
 
   const handleDelete = (id: string, e: React.MouseEvent) => {
     e.preventDefault();
@@ -51,7 +51,7 @@ export default function HistoryPage() {
       )
     ) {
       analyses.forEach((a) => storage.deleteAnalysis(a.id));
-      setAnalyses([]);
+      setAnalyses(storage.getAllAnalyses());
     }
   };
 
