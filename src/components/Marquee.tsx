@@ -1,18 +1,17 @@
 "use client";
 
+import { useReducedMotion } from "@/hooks/useReducedMotion";
+
 interface MarqueeProps {
   children: React.ReactNode;
   speed?: number;
   className?: string;
 }
 
-const prefersReducedMotion =
-  typeof window !== "undefined"
-    ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
-    : false;
-
 export function Marquee({ children, speed = 1, className }: MarqueeProps) {
-  if (prefersReducedMotion) {
+  const reduced = useReducedMotion();
+
+  if (reduced) {
     return <div className={className}>{children}</div>;
   }
 

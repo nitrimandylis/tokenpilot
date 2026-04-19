@@ -1,4 +1,7 @@
+"use client";
+
 import { motion } from "motion/react";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 
 interface FadeUpProps {
   children: React.ReactNode;
@@ -6,13 +9,10 @@ interface FadeUpProps {
   duration?: number;
 }
 
-const prefersReducedMotion =
-  typeof window !== "undefined"
-    ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
-    : false;
-
 export function FadeUp({ children, delay = 0, duration = 0.5 }: FadeUpProps) {
-  if (prefersReducedMotion) {
+  const reduced = useReducedMotion();
+
+  if (reduced) {
     return <>{children}</>;
   }
 

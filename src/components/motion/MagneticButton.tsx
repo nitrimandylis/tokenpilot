@@ -2,21 +2,18 @@
 
 import { useRef } from "react";
 import { motion, useMotionValue, useSpring } from "motion/react";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 
 interface MagneticButtonProps {
   children: React.ReactNode;
   strength?: number;
 }
 
-const prefersReducedMotion =
-  typeof window !== "undefined"
-    ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
-    : false;
-
 export function MagneticButton({
   children,
   strength = 0.3,
 }: MagneticButtonProps) {
+  const reduced = useReducedMotion();
   const ref = useRef<HTMLDivElement>(null);
 
   const rawX = useMotionValue(0);
@@ -24,7 +21,7 @@ export function MagneticButton({
   const x = useSpring(rawX, { stiffness: 150, damping: 15, mass: 0.1 });
   const y = useSpring(rawY, { stiffness: 150, damping: 15, mass: 0.1 });
 
-  if (prefersReducedMotion) {
+  if (reduced) {
     return <>{children}</>;
   }
 

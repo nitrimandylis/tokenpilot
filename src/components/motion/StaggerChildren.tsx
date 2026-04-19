@@ -1,15 +1,14 @@
+"use client";
+
+import React from "react";
 import { motion, type Variants } from "motion/react";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 
 interface StaggerChildrenProps {
   children: React.ReactNode;
   staggerDelay?: number;
   initialDelay?: number;
 }
-
-const prefersReducedMotion =
-  typeof window !== "undefined"
-    ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
-    : false;
 
 const containerVariants = (
   staggerDelay: number,
@@ -38,7 +37,9 @@ export function StaggerChildren({
   staggerDelay = 0.07,
   initialDelay = 0,
 }: StaggerChildrenProps) {
-  if (prefersReducedMotion) {
+  const reduced = useReducedMotion();
+
+  if (reduced) {
     return <>{children}</>;
   }
 
@@ -48,13 +49,11 @@ export function StaggerChildren({
       initial="hidden"
       animate="visible"
     >
-      {Array.isArray(children)
-        ? children.map((child, i) => (
-            <motion.div key={i} variants={itemVariants}>
-              {child}
-            </motion.div>
-          ))
-        : children}
+      {React.Children.toArray(children).map((child, i) => (
+        <motion.div key={i} variants={itemVariants}>
+          {child}
+        </motion.div>
+      ))}
     </motion.div>
   );
 }

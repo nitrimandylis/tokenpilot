@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useReducedMotion } from "@/hooks/useReducedMotion";
 
 interface CountUpProps {
   value: number;
@@ -11,11 +12,6 @@ interface CountUpProps {
   className?: string;
 }
 
-const prefersReducedMotion =
-  typeof window !== "undefined"
-    ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
-    : false;
-
 export function CountUp({
   value,
   duration = 1.5,
@@ -24,12 +20,13 @@ export function CountUp({
   decimals = 0,
   className,
 }: CountUpProps) {
-  const [current, setCurrent] = useState(prefersReducedMotion ? value : 0);
+  const reduced = useReducedMotion();
+  const [current, setCurrent] = useState(0);
   const rafRef = useRef<number | null>(null);
   const startRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (prefersReducedMotion) {
+    if (reduced) {
       setCurrent(value);
       return;
     }
@@ -52,6 +49,7 @@ export function CountUp({
       }
     };
 
+    startRef.current = null;
     rafRef.current = requestAnimationFrame(tick);
 
     return () => {
@@ -59,7 +57,7 @@ export function CountUp({
         cancelAnimationFrame(rafRef.current);
       }
     };
-  }, [value, duration]);
+  }, [value, duration, reduced]);
 
   const formatted = current.toFixed(decimals);
 
