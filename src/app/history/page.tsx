@@ -60,26 +60,29 @@ export default function HistoryPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans flex flex-col">
+    <div className="min-h-screen bg-ink text-bone font-sans flex flex-col">
       <Header currentPage="history" />
 
       <main className="flex-1 max-w-5xl mx-auto px-6 py-10 w-full">
         <div className="mb-8">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-extrabold tracking-tight">
-                Analysis History
+              <h1
+                className="font-display text-3xl font-semibold text-bone"
+                style={{ letterSpacing: "-0.03em" }}
+              >
+                Analysis history
               </h1>
-              <p className="text-sm text-slate-400 mt-1">
-                View and manage your past analyses
+              <p className="text-sm text-bone-subtle mt-1 font-sans">
+                View and manage past analyses
               </p>
             </div>
             {analyses.length > 0 && (
               <button
                 onClick={handleClearAll}
-                className="text-xs text-slate-500 hover:text-red-400 transition-colors cursor-pointer font-medium"
+                className="text-xs text-bone-subtle hover:text-critical transition-colors cursor-pointer font-medium"
               >
-                Clear All
+                Clear all
               </button>
             )}
           </div>
@@ -87,9 +90,9 @@ export default function HistoryPage() {
 
         {analyses.length === 0 ? (
           <div className="flex flex-col items-center text-center pt-12">
-            <div className="w-16 h-16 rounded-full bg-slate-900 flex items-center justify-center mb-4">
+            <div className="w-16 h-16 rounded-sm bg-ink-elevated border border-ink-border flex items-center justify-center mb-4">
               <svg
-                className="w-8 h-8 text-slate-600"
+                className="w-8 h-8 text-bone-subtle"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -102,23 +105,26 @@ export default function HistoryPage() {
                 />
               </svg>
             </div>
-            <h2 className="text-lg font-bold text-slate-300">
+            <h2
+              className="text-lg font-semibold text-bone font-display"
+              style={{ letterSpacing: "-0.02em" }}
+            >
               No analyses yet
             </h2>
-            <p className="text-sm text-slate-500 mt-2 max-w-md">
-              Run your first analysis to start tracking your Anthropic API usage
-              and identify optimization opportunities.
+            <p className="text-sm text-bone-subtle mt-2 max-w-md font-sans">
+              Run your first analysis to start tracking your API usage and
+              identify optimization opportunities.
             </p>
             <Link
               href="/"
-              className="mt-6 rounded-lg bg-emerald-500 px-6 py-2.5 text-sm font-bold text-slate-950 hover:bg-emerald-400 transition-colors"
+              className="mt-6 rounded-sm bg-moss px-6 py-2.5 text-sm font-medium text-bone hover:bg-moss-light transition-colors"
             >
-              Get Started
+              Get started →
             </Link>
           </div>
         ) : (
-          <div className="space-y-3">
-            {analyses.map((analysis) => {
+          <div className="space-y-2">
+            {analyses.map((analysis, idx) => {
               // Skip analyses with old structure (no months object)
               if (
                 !analysis.months ||
@@ -131,6 +137,7 @@ export default function HistoryPage() {
               const monthKeys = Object.keys(analysis.months).sort().reverse();
               const latestMonthKey = monthKeys[0];
               const latestMonth = analysis.months[latestMonthKey];
+              const cardIndex = String(idx + 1).padStart(2, "0");
 
               return (
                 <Link
@@ -138,32 +145,40 @@ export default function HistoryPage() {
                   href={`/history/${analysis.id}/recommendations?year=${latestMonth.year}&month=${latestMonth.month}`}
                   className="block group"
                 >
-                  <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-5 hover:border-slate-700 hover:bg-slate-900/60 transition-all cursor-pointer">
-                    <div className="flex items-center justify-between gap-4">
-                      <VendorBadge vendor={analysis.vendor} />
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3">
-                          <h3 className="text-base font-bold text-slate-200 group-hover:text-emerald-400 transition-colors">
+                  <div className="rounded-sm border border-ink-border bg-ink-elevated p-5 hover:bg-ink-hover transition-all cursor-pointer">
+                    <div className="flex items-center gap-4">
+                      {/* Index */}
+                      <span className="font-mono text-xs text-bone-subtle shrink-0 w-6">
+                        {cardIndex}
+                      </span>
+
+                      {/* Vendor badge */}
+                      <VendorBadge vendor={analysis.vendor} size="small" />
+
+                      {/* Main info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <h3 className="text-base font-semibold text-bone font-sans group-hover:text-bone transition-colors">
                             {analysis.orgName}
                           </h3>
-                          <span className="text-xs text-slate-500 font-mono">
+                          <span className="text-xs text-bone-subtle font-mono">
                             {monthKeys.length} month
                             {monthKeys.length !== 1 ? "s" : ""}
                           </span>
                         </div>
-                        <div className="mt-2 flex items-center gap-4 text-xs text-slate-400">
+                        <div className="mt-1.5 flex items-center gap-3 text-xs text-bone-subtle flex-wrap">
                           <span className="font-mono">
                             Latest: {monthNames[latestMonth.month]}{" "}
                             {latestMonth.year}
                           </span>
                           <span>·</span>
-                          <span className="font-semibold text-slate-200">
-                            {$(latestMonth.report.spend)} spend
+                          <span className="text-bone">
+                            {$(latestMonth.report.spend)}/mo
                           </span>
                           {latestMonth.report.savings > 0 && (
                             <>
                               <span>·</span>
-                              <span className="font-semibold text-emerald-400">
+                              <span className="font-mono font-bold text-moss-light">
                                 {$(latestMonth.report.savings)} recoverable
                               </span>
                             </>
@@ -174,15 +189,17 @@ export default function HistoryPage() {
                           </span>
                         </div>
                       </div>
+
+                      {/* Actions */}
                       <div className="flex items-center gap-3 shrink-0">
                         <button
                           onClick={(e) => handleDelete(analysis.id, e)}
-                          className="text-xs text-slate-500 hover:text-red-400 transition-colors cursor-pointer leading-none"
+                          className="text-xs text-bone-subtle hover:text-critical transition-colors cursor-pointer leading-none"
                         >
                           Clear
                         </button>
                         <svg
-                          className="w-4 h-4 text-slate-600 group-hover:text-emerald-400 transition-colors shrink-0"
+                          className="w-4 h-4 text-bone-subtle group-hover:text-bone transition-colors shrink-0"
                           fill="none"
                           viewBox="0 0 24 24"
                           stroke="currentColor"

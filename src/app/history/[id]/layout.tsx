@@ -37,7 +37,7 @@ function HistoryLayoutContent({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans flex flex-col">
+    <div className="min-h-screen bg-ink text-bone font-sans flex flex-col">
       <Header currentPage="analysis" vendor={analysis.vendor} />
 
       <main className="flex-1 max-w-5xl mx-auto px-6 py-10 w-full">
@@ -55,7 +55,7 @@ export default function HistoryLayout({
   children: React.ReactNode;
 }) {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-slate-950" />}>
+    <Suspense fallback={<div className="min-h-screen bg-ink" />}>
       <HistoryLayoutContent>{children}</HistoryLayoutContent>
     </Suspense>
   );
