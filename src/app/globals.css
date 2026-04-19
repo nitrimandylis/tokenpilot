@@ -51,6 +51,8 @@
   --font-clash: "ClashDisplay", sans-serif;
   --font-satoshi: "Satoshi", sans-serif;
   --font-mono: "JetBrainsMono", monospace;
+  --font-sans: var(--font-satoshi);
+  --font-display: var(--font-clash);
 
   /* Shadcn CSS variable remapping */
   --background: #14100f;
