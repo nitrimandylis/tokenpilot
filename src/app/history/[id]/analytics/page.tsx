@@ -750,14 +750,14 @@ export default function AnalyticsPage() {
 
   // Color mapping for consistency with chart
   const colorClasses = [
-    "bg-blue-500",
-    "bg-violet-500",
-    "bg-amber-500",
-    "bg-emerald-500",
-    "bg-rose-500",
-    "bg-cyan-500",
-    "bg-indigo-500",
-    "bg-orange-500",
+    "bg-[#5a8bc4]",
+    "bg-[#9b7bc4]",
+    "bg-[#c4a35a]",
+    "bg-moss",
+    "bg-[#c47b8b]",
+    "bg-[#5ab4c4]",
+    "bg-[#7b8bc4]",
+    "bg-[#c4875a]",
   ];
 
   // Show loading state while fetching year data
@@ -768,7 +768,7 @@ export default function AnalyticsPage() {
           {/* Background illustration */}
           <div className="absolute inset-0 flex items-center justify-center">
             <svg
-              className="w-32 h-32 text-slate-800/40"
+              className="w-32 h-32 text-ink-border/40"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -782,12 +782,12 @@ export default function AnalyticsPage() {
             </svg>
           </div>
           {/* Spinner */}
-          <div className="relative w-16 h-16 border-4 border-emerald-500/20 border-t-emerald-400 rounded-full animate-spin" />
+          <div className="relative w-16 h-16 border-4 border-moss/20 border-t-moss-light rounded-full animate-spin" />
         </div>
-        <p className="text-base text-slate-300 font-semibold mb-2">
+        <p className="text-base text-bone font-semibold mb-2">
           Analyzing {year}
         </p>
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-bone-subtle">
           Fetching usage data and running optimization analysis...
         </p>
       </div>
@@ -801,21 +801,21 @@ export default function AnalyticsPage() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <VendorBadge vendor={analysisRecord.vendor} size="small" />
-            <span className="text-sm text-slate-300 font-medium">
+            <span className="text-sm text-bone font-medium">
               {analysisRecord.orgName}
             </span>
           </div>
           <button
             onClick={handleRefresh}
-            className="text-xs font-semibold px-3 py-1.5 rounded-lg text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 transition-colors"
+            className="text-xs font-semibold px-3 py-1.5 rounded-lg text-moss hover:text-moss-light hover:bg-moss/10 transition-colors"
             title="Refresh data from API"
           >
             Refresh
           </button>
         </div>
 
-        <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-6">
-          <p className="text-sm text-slate-400">
+        <div className="rounded-lg border border-ink-border bg-ink-elevated/40 p-6">
+          <p className="text-sm text-bone-muted">
             No data for {year}. Run an analysis to see yearly trends.
           </p>
         </div>
@@ -844,7 +844,7 @@ export default function AnalyticsPage() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <VendorBadge vendor={analysisRecord.vendor} size="small" />
-          <span className="text-sm text-slate-300 font-medium">
+          <span className="text-sm text-bone font-medium">
             {analysisRecord.orgName}
           </span>
         </div>
@@ -853,8 +853,8 @@ export default function AnalyticsPage() {
           disabled={isRefreshing}
           className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${
             isRefreshing
-              ? "text-slate-600 cursor-not-allowed"
-              : "text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 cursor-pointer"
+              ? "text-bone-subtle cursor-not-allowed"
+              : "text-moss hover:text-moss-light hover:bg-moss/10 cursor-pointer"
           }`}
           title="Refresh data from API"
         >
@@ -863,22 +863,22 @@ export default function AnalyticsPage() {
       </div>
 
       {/* Tab Switcher */}
-      <div className="flex items-center gap-1 border-b border-slate-800">
+      <div className="flex items-center gap-1 border-b border-ink-border">
         <Link
           href={`/history/${id}/recommendations?year=${new Date().getFullYear()}&month=${new Date().getMonth()}`}
-          className="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px border-transparent text-slate-500 hover:text-slate-400"
+          className="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px border-transparent text-bone-subtle hover:text-bone-muted"
         >
           Recommendations
         </Link>
         <Link
           href={`/history/${id}/analytics?year=${new Date().getFullYear()}`}
-          className="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px border-emerald-500 text-slate-200"
+          className="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px border-moss text-bone"
         >
           Analytics
         </Link>
         <Link
           href={`/history/${id}/raw-data?year=${new Date().getFullYear()}&month=${new Date().getMonth()}`}
-          className="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px border-transparent text-slate-500 hover:text-slate-400"
+          className="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px border-transparent text-bone-subtle hover:text-bone-muted"
         >
           Raw API Data
         </Link>
@@ -886,7 +886,7 @@ export default function AnalyticsPage() {
 
       {/* Year Navigation */}
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wide">
+        <h3 className="text-sm font-semibold text-bone-muted font-display tracking-tight">
           Yearly Analytics
         </h3>
         <div className="flex items-center gap-3">
@@ -894,7 +894,7 @@ export default function AnalyticsPage() {
             onClick={() => {
               router.push(`/history/${id}/analytics?year=${year - 1}`);
             }}
-            className="p-1.5 text-slate-500 hover:text-emerald-400 cursor-pointer transition-colors rounded hover:bg-slate-800/50"
+            className="p-1.5 text-bone-subtle hover:text-moss cursor-pointer transition-colors rounded hover:bg-ink-border/50"
             title="Previous year"
           >
             <svg
@@ -914,7 +914,7 @@ export default function AnalyticsPage() {
 
           <button
             onClick={() => setShowYearPicker(true)}
-            className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-300 hover:text-slate-200 cursor-pointer rounded-lg hover:bg-slate-800/50 transition-colors"
+            className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-bone hover:text-bone cursor-pointer rounded-lg hover:bg-ink-border/50 transition-colors"
             title="Select year"
           >
             <svg
@@ -940,10 +940,10 @@ export default function AnalyticsPage() {
               router.push(`/history/${id}/analytics?year=${year + 1}`);
             }}
             disabled={year >= new Date().getFullYear()}
-            className={`p-1.5 transition-colors rounded hover:bg-slate-800/50 ${
+            className={`p-1.5 transition-colors rounded hover:bg-ink-border/50 ${
               year >= new Date().getFullYear()
-                ? "text-slate-700 cursor-not-allowed"
-                : "text-slate-500 hover:text-emerald-400 cursor-pointer"
+                ? "text-bone-subtle/50 cursor-not-allowed"
+                : "text-bone-subtle hover:text-moss cursor-pointer"
             }`}
             title="Next year"
           >
@@ -963,7 +963,7 @@ export default function AnalyticsPage() {
           </button>
 
           {year !== new Date().getFullYear() && (
-            <div className="w-px h-4 bg-slate-700 mx-1" />
+            <div className="w-px h-4 bg-ink-border mx-1" />
           )}
 
           {year !== new Date().getFullYear() && (
@@ -973,7 +973,7 @@ export default function AnalyticsPage() {
                   `/history/${id}/analytics?year=${new Date().getFullYear()}`
                 );
               }}
-              className="text-xs font-semibold text-emerald-400 hover:text-emerald-300 px-2 py-1 rounded hover:bg-emerald-500/10 cursor-pointer transition-colors"
+              className="text-xs font-semibold text-moss hover:text-moss-light px-2 py-1 rounded hover:bg-moss/10 cursor-pointer transition-colors"
             >
               Jump to Current
             </button>
@@ -982,7 +982,7 @@ export default function AnalyticsPage() {
       </div>
 
       {/* Stats */}
-      <div className="flex flex-wrap justify-between gap-y-6 rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
+      <div className="flex flex-wrap justify-between gap-y-6 rounded-2xl border border-ink-border bg-ink-elevated/50 p-6">
         <Stat
           label={`${year} Total Spend`}
           value={$(yearSpend)}
@@ -1009,8 +1009,8 @@ export default function AnalyticsPage() {
 
       {/* Workspace Spend Breakdown */}
       {sortedWorkspaces.length > 0 && (
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5">
-          <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4">
+        <div className="rounded-2xl border border-ink-border bg-ink-elevated/40 p-5">
+          <h3 className="text-[10px] font-bold text-bone-subtle font-display tracking-wider mb-4">
             {analysisRecord.vendor === Vendor.ANTHROPIC
               ? "Workspace"
               : "Project"}{" "}
@@ -1033,10 +1033,10 @@ export default function AnalyticsPage() {
                   <div
                     className={`w-3 h-3 rounded ${colorClasses[idx % colorClasses.length]} shrink-0`}
                   />
-                  <span className="text-xs text-slate-400 w-32 font-medium truncate">
+                  <span className="text-xs text-bone-muted w-32 font-medium truncate">
                     {workspaceNames[wsId]}
                   </span>
-                  <div className="flex-1 h-5 bg-slate-800/50 rounded overflow-hidden relative">
+                  <div className="flex-1 h-5 bg-ink-border/50 rounded overflow-hidden relative">
                     {total > 0 && (
                       <div
                         className={`h-full ${colorClasses[idx % colorClasses.length]} rounded opacity-70`}
@@ -1046,15 +1046,15 @@ export default function AnalyticsPage() {
                         }}
                       />
                     )}
-                    <span className="absolute right-2 top-0.5 text-[10px] font-bold text-slate-200 font-mono">
+                    <span className="absolute right-2 top-0.5 text-[10px] font-bold text-bone font-mono">
                       {$(total)}
                     </span>
                   </div>
                   <div className="text-right shrink-0 w-24">
-                    <div className="text-[10px] text-slate-500">
+                    <div className="text-[10px] text-bone-subtle">
                       {percentage.toFixed(1)}% of total
                     </div>
-                    <div className="text-[9px] text-slate-600">
+                    <div className="text-[9px] text-bone-subtle/50">
                       ~{$(avgMonthly)}/mo avg
                     </div>
                   </div>
@@ -1066,16 +1066,16 @@ export default function AnalyticsPage() {
           {/* Tip if only default workspace */}
           {sortedWorkspaces.length === 1 &&
             sortedWorkspaces[0] === "default" && (
-              <div className="mt-4 p-3 rounded-lg border border-emerald-500/20 bg-emerald-500/5">
+              <div className="mt-4 p-3 rounded-lg border border-moss/20 bg-moss/5">
                 <div className="flex items-center justify-between mb-1">
-                  <p className="text-xs text-emerald-400/90 font-semibold">
+                  <p className="text-xs text-moss/90 font-semibold">
                     💡 Recommendation
                   </p>
-                  <span className="text-[10px] font-bold text-emerald-400">
+                  <span className="text-[10px] font-bold text-moss">
                     100% CONFIDENCE
                   </span>
                 </div>
-                <p className="text-xs text-emerald-400/80">
+                <p className="text-xs text-moss/80">
                   All usage is in the default{" "}
                   {analysisRecord.vendor === Vendor.ANTHROPIC
                     ? "workspace"
@@ -1093,8 +1093,8 @@ export default function AnalyticsPage() {
       )}
 
       {/* Monthly Spend Chart - Stacked by Workspace */}
-      <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5">
-        <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4">
+      <div className="rounded-2xl border border-ink-border bg-ink-elevated/40 p-5">
+        <h3 className="text-[10px] font-bold text-bone-subtle font-display tracking-wider mb-4">
           Monthly Spend by{" "}
           {analysisRecord.vendor === Vendor.ANTHROPIC ? "Workspace" : "Project"}{" "}
           - {year}
@@ -1114,32 +1114,32 @@ export default function AnalyticsPage() {
             }))}
             margin={{ top: 10, right: 10, left: 10, bottom: 20 }}
           >
-            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+            <CartesianGrid strokeDasharray="3 3" stroke="#2a2220" />
             <XAxis
               dataKey="month"
-              tick={{ fill: "#64748b", fontSize: 11 }}
-              stroke="#334155"
+              tick={{ fill: "#c4b8a7", fontSize: 11 }}
+              stroke="#2a2220"
             />
             <YAxis
-              tick={{ fill: "#64748b", fontSize: 11 }}
-              stroke="#334155"
+              tick={{ fill: "#c4b8a7", fontSize: 11 }}
+              stroke="#2a2220"
               tickFormatter={(value) => `$${value}`}
             />
             <Tooltip
               contentStyle={{
-                backgroundColor: "#1e293b",
-                border: "1px solid #475569",
+                backgroundColor: "#1a1614",
+                border: "1px solid #2a2220",
                 borderRadius: "8px",
                 fontSize: "12px",
                 padding: "8px 12px",
               }}
               labelStyle={{
-                color: "#e2e8f0",
+                color: "#ede4d3",
                 fontWeight: 600,
                 marginBottom: "4px",
               }}
-              itemStyle={{ color: "#cbd5e1" }}
-              cursor={{ fill: "#1e293b", opacity: 0.3 }}
+              itemStyle={{ color: "#c4b8a7" }}
+              cursor={{ fill: "#2a2220", opacity: 0.3 }}
               labelFormatter={(label) => `${label} ${year}`}
               formatter={(value) => $(typeof value === "number" ? value : 0)}
             />
@@ -1149,14 +1149,14 @@ export default function AnalyticsPage() {
             />
             {sortedWorkspaces.map((wsId, idx) => {
               const colorMap = {
-                0: "#3b82f6", // blue
-                1: "#8b5cf6", // violet
-                2: "#f59e0b", // amber
-                3: "#10b981", // emerald
-                4: "#f43f5e", // rose
-                5: "#06b6d4", // cyan
-                6: "#6366f1", // indigo
-                7: "#f97316", // orange
+                0: "#5a8bc4",
+                1: "#9b7bc4",
+                2: "#c4a35a",
+                3: "#4e7a3e",
+                4: "#c47b8b",
+                5: "#5ab4c4",
+                6: "#7b8bc4",
+                7: "#c4875a",
               };
               return (
                 <Bar
@@ -1178,8 +1178,8 @@ export default function AnalyticsPage() {
 
       {/* OpenAI: Monthly Spend by Service Chart */}
       {analysisRecord.vendor === Vendor.OPENAI && sortedServices.length > 0 && (
-        <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5">
-          <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4">
+        <div className="rounded-2xl border border-ink-border bg-ink-elevated/40 p-5">
+          <h3 className="text-[10px] font-bold text-bone-subtle font-display tracking-wider mb-4">
             Monthly Spend by Service - {year}
           </h3>
 
@@ -1198,32 +1198,32 @@ export default function AnalyticsPage() {
               }))}
               margin={{ top: 10, right: 10, left: 10, bottom: 20 }}
             >
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#2a2220" />
               <XAxis
                 dataKey="month"
-                tick={{ fill: "#64748b", fontSize: 11 }}
-                stroke="#334155"
+                tick={{ fill: "#c4b8a7", fontSize: 11 }}
+                stroke="#2a2220"
               />
               <YAxis
-                tick={{ fill: "#64748b", fontSize: 11 }}
-                stroke="#334155"
+                tick={{ fill: "#c4b8a7", fontSize: 11 }}
+                stroke="#2a2220"
                 tickFormatter={(value) => `$${value}`}
               />
               <Tooltip
                 contentStyle={{
-                  backgroundColor: "#1e293b",
-                  border: "1px solid #475569",
+                  backgroundColor: "#1a1614",
+                  border: "1px solid #2a2220",
                   borderRadius: "8px",
                   fontSize: "12px",
                   padding: "8px 12px",
                 }}
                 labelStyle={{
-                  color: "#e2e8f0",
+                  color: "#ede4d3",
                   fontWeight: 600,
                   marginBottom: "4px",
                 }}
-                itemStyle={{ color: "#cbd5e1" }}
-                cursor={{ fill: "#1e293b", opacity: 0.3 }}
+                itemStyle={{ color: "#c4b8a7" }}
+                cursor={{ fill: "#2a2220", opacity: 0.3 }}
                 labelFormatter={(label) => `${label} ${year}`}
                 formatter={(value) => $(typeof value === "number" ? value : 0)}
               />
@@ -1233,14 +1233,14 @@ export default function AnalyticsPage() {
               />
               {sortedServices.map((service, idx) => {
                 const colorMap = {
-                  0: "#3b82f6", // blue
-                  1: "#8b5cf6", // violet
-                  2: "#f59e0b", // amber
-                  3: "#10b981", // emerald
-                  4: "#f43f5e", // rose
-                  5: "#06b6d4", // cyan
-                  6: "#6366f1", // indigo
-                  7: "#f97316", // orange
+                  0: "#5a8bc4",
+                  1: "#9b7bc4",
+                  2: "#c4a35a",
+                  3: "#4e7a3e",
+                  4: "#c47b8b",
+                  5: "#5ab4c4",
+                  6: "#7b8bc4",
+                  7: "#c4875a",
                 };
                 return (
                   <Bar
@@ -1280,12 +1280,12 @@ export default function AnalyticsPage() {
           return (
             <div
               key={projectId}
-              className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5"
+              className="rounded-2xl border border-ink-border bg-ink-elevated/40 p-5"
             >
-              <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">
+              <h3 className="text-[10px] font-bold text-bone-subtle font-display tracking-wider mb-2">
                 {projectNames[projectId] || projectId} - Service Breakdown
               </h3>
-              <p className="text-xs text-slate-400 mb-4">
+              <p className="text-xs text-bone-muted mb-4">
                 Total: {$(projectTotal)} across {projectServicesUsed.length}{" "}
                 service
                 {projectServicesUsed.length !== 1 ? "s" : ""}
@@ -1309,32 +1309,32 @@ export default function AnalyticsPage() {
                   }))}
                   margin={{ top: 10, right: 10, left: 10, bottom: 20 }}
                 >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#2a2220" />
                   <XAxis
                     dataKey="month"
-                    tick={{ fill: "#64748b", fontSize: 11 }}
-                    stroke="#334155"
+                    tick={{ fill: "#c4b8a7", fontSize: 11 }}
+                    stroke="#2a2220"
                   />
                   <YAxis
-                    tick={{ fill: "#64748b", fontSize: 11 }}
-                    stroke="#334155"
+                    tick={{ fill: "#c4b8a7", fontSize: 11 }}
+                    stroke="#2a2220"
                     tickFormatter={(value) => `$${value}`}
                   />
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: "#1e293b",
-                      border: "1px solid #475569",
+                      backgroundColor: "#1a1614",
+                      border: "1px solid #2a2220",
                       borderRadius: "8px",
                       fontSize: "12px",
                       padding: "8px 12px",
                     }}
                     labelStyle={{
-                      color: "#e2e8f0",
+                      color: "#ede4d3",
                       fontWeight: 600,
                       marginBottom: "4px",
                     }}
-                    itemStyle={{ color: "#cbd5e1" }}
-                    cursor={{ fill: "#1e293b", opacity: 0.3 }}
+                    itemStyle={{ color: "#c4b8a7" }}
+                    cursor={{ fill: "#2a2220", opacity: 0.3 }}
                     labelFormatter={(label) => `${label} ${year}`}
                     formatter={(value) =>
                       $(typeof value === "number" ? value : 0)
@@ -1346,14 +1346,14 @@ export default function AnalyticsPage() {
                   />
                   {projectServicesUsed.map((service, idx) => {
                     const colorMap = {
-                      0: "#3b82f6", // blue
-                      1: "#8b5cf6", // violet
-                      2: "#f59e0b", // amber
-                      3: "#10b981", // emerald
-                      4: "#f43f5e", // rose
-                      5: "#06b6d4", // cyan
-                      6: "#6366f1", // indigo
-                      7: "#f97316", // orange
+                      0: "#5a8bc4",
+                      1: "#9b7bc4",
+                      2: "#c4a35a",
+                      3: "#4e7a3e",
+                      4: "#c47b8b",
+                      5: "#5ab4c4",
+                      6: "#7b8bc4",
+                      7: "#c4875a",
                     };
                     return (
                       <Bar

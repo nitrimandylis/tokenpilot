@@ -2,19 +2,19 @@ import Link from "next/link";
 
 export default function NotFound() {
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans flex items-center justify-center px-6">
+    <div className="min-h-screen bg-ink text-bone font-sans flex items-center justify-center px-6">
       <div className="max-w-2xl w-full text-center">
         {/* Animated 404 Graphic */}
         <div className="mb-8 relative">
-          <div className="text-[180px] font-black text-transparent bg-clip-text bg-gradient-to-br from-slate-800 to-slate-900 leading-none select-none">
+          <div className="text-[180px] font-black text-transparent bg-clip-text bg-gradient-to-br from-ink-elevated to-ink leading-none select-none font-display">
             404
           </div>
           <div className="absolute inset-0 flex items-center justify-center">
-            <div className="w-32 h-32 rounded-full bg-gradient-to-br from-emerald-400/20 to-emerald-600/20 animate-pulse" />
+            <div className="w-32 h-32 rounded-full bg-gradient-to-br from-moss-light/20 to-moss/20 animate-pulse" />
           </div>
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
             <svg
-              className="w-20 h-20 text-emerald-500/30"
+              className="w-20 h-20 text-moss/30"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -30,49 +30,49 @@ export default function NotFound() {
         </div>
 
         {/* Content */}
-        <h1 className="text-3xl font-extrabold tracking-tight mb-3">
+        <h1 className="text-3xl font-extrabold tracking-tight mb-3 font-display">
           Page Not Found
         </h1>
-        <p className="text-slate-400 text-base mb-8 max-w-md mx-auto">
-          The page you're looking for doesn't exist. It might have been moved or
-          deleted, or the URL might be incorrect.
+        <p className="text-bone-muted text-base mb-8 max-w-md mx-auto">
+          The page you&apos;re looking for doesn&apos;t exist. It might have
+          been moved or deleted, or the URL might be incorrect.
         </p>
 
         {/* Action Buttons */}
         <div className="flex justify-center mb-12">
           <Link
             href="/"
-            className="rounded-lg bg-emerald-500 px-6 py-3 text-sm font-bold text-slate-950 hover:bg-emerald-400 transition-colors"
+            className="rounded-lg bg-moss px-6 py-3 text-sm font-bold text-bone hover:bg-moss-light transition-colors"
           >
             ← Back to Home
           </Link>
         </div>
 
         {/* Helpful Links */}
-        <div className="border-t border-slate-800 pt-8">
-          <p className="text-xs text-slate-600 mb-4 uppercase tracking-wider font-semibold">
+        <div className="border-t border-ink-border pt-8">
+          <p className="text-xs text-bone-subtle mb-4 font-semibold">
             Quick Links
           </p>
           <div className="flex gap-6 justify-center text-sm">
             <Link
               href="/"
-              className="text-slate-500 hover:text-emerald-400 transition-colors"
+              className="text-bone-subtle hover:text-moss-light transition-colors"
             >
               Get New Report
             </Link>
-            <span className="text-slate-800">·</span>
+            <span className="text-ink-border">·</span>
             <Link
               href="/history"
-              className="text-slate-500 hover:text-emerald-400 transition-colors"
+              className="text-bone-subtle hover:text-moss-light transition-colors"
             >
               Analysis History
             </Link>
-            <span className="text-slate-800">·</span>
+            <span className="text-ink-border">·</span>
             <a
               href="https://docs.anthropic.com"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-slate-500 hover:text-emerald-400 transition-colors"
+              className="text-bone-subtle hover:text-moss-light transition-colors"
             >
               Anthropic Docs
             </a>
@@ -80,9 +80,9 @@ export default function NotFound() {
         </div>
 
         {/* Brand */}
-        <div className="mt-12 flex items-center justify-center gap-2 text-slate-700">
-          <div className="w-5 h-5 rounded bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center">
-            <span className="text-[8px] font-black text-slate-950">TP</span>
+        <div className="mt-12 flex items-center justify-center gap-2 text-bone-subtle/50">
+          <div className="w-5 h-5 rounded bg-gradient-to-br from-moss-light to-moss flex items-center justify-center">
+            <span className="text-[8px] font-black text-bone">TP</span>
           </div>
           <span className="text-xs font-mono">TokenPilot</span>
         </div>

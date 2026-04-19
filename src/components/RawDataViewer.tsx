@@ -36,7 +36,7 @@ function RawDataViewer({ data, openKey, onToggle }: RawDataViewerProps) {
 
   if (!data)
     return (
-      <p className="text-sm text-slate-500 text-center py-12">
+      <p className="text-sm text-bone-subtle text-center py-12">
         No raw data captured. Run an analysis first.
       </p>
     );
@@ -82,12 +82,12 @@ function RawDataViewer({ data, openKey, onToggle }: RawDataViewerProps) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-bone-subtle">
           {entries.length} API responses captured
         </p>
         <button
           onClick={downloadAll}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-900 text-xs font-medium text-slate-400 hover:border-slate-600 hover:text-slate-300 transition-colors cursor-pointer"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-ink-border bg-ink-elevated text-xs font-medium text-bone-muted hover:border-bone-subtle hover:text-bone transition-colors cursor-pointer"
         >
           <svg
             className="w-3.5 h-3.5"
@@ -123,38 +123,38 @@ function RawDataViewer({ data, openKey, onToggle }: RawDataViewerProps) {
         return (
           <div
             key={key}
-            className={`rounded-xl border ${hasError ? "border-red-500/20 bg-slate-900/40" : "border-slate-800 bg-slate-900/30"}`}
+            className={`rounded-xl border ${hasError ? "border-critical/20 bg-ink-elevated/40" : "border-ink-border bg-ink-elevated/30"}`}
           >
             <button
               onClick={() => onToggle(isOpen ? null : key)}
-              className="w-full flex items-center gap-4 px-5 py-3.5 text-left hover:bg-white/[0.02] rounded-xl cursor-pointer"
+              className="w-full flex items-center gap-4 px-5 py-3.5 text-left hover:bg-ink-hover rounded-xl cursor-pointer"
             >
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold text-slate-200">
+                  <span className="text-sm font-semibold text-bone">
                     {meta.label}
                   </span>
                   {hasError && (
-                    <span className="inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset bg-red-500/10 text-red-400 ring-red-500/20">
+                    <span className="inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset bg-critical/10 text-critical ring-critical/20">
                       Error
                     </span>
                   )}
                   {!hasError && recordCount != null && (
-                    <span className="text-[10px] font-mono text-slate-600">
+                    <span className="text-[10px] font-mono text-bone-subtle">
                       {recordCount} records
                     </span>
                   )}
                 </div>
-                <p className="text-[11px] text-slate-600 font-mono mt-0.5">
+                <p className="text-[11px] text-bone-subtle font-mono mt-0.5">
                   {meta.desc}
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-mono text-slate-600">
+                <span className="text-[10px] font-mono text-bone-subtle">
                   {lineCount} lines
                 </span>
                 {val.fetched_at && (
-                  <span className="text-[10px] text-slate-700 hidden sm:block">
+                  <span className="text-[10px] text-bone-subtle/50 hidden sm:block">
                     {new Date(val.fetched_at).toLocaleTimeString()}
                   </span>
                 )}
@@ -163,7 +163,7 @@ function RawDataViewer({ data, openKey, onToggle }: RawDataViewerProps) {
                     e.stopPropagation();
                     downloadOne(key);
                   }}
-                  className="p-1 rounded hover:bg-slate-800 text-slate-600 hover:text-slate-400 transition-colors cursor-pointer"
+                  className="p-1 rounded hover:bg-ink-hover text-bone-subtle hover:text-bone transition-colors cursor-pointer"
                   role="button"
                   tabIndex={0}
                   onKeyDown={(e) => {
@@ -190,7 +190,7 @@ function RawDataViewer({ data, openKey, onToggle }: RawDataViewerProps) {
                   </svg>
                 </div>
                 <svg
-                  className={`w-4 h-4 text-slate-500 shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`}
+                  className={`w-4 h-4 text-bone-subtle shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`}
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -205,11 +205,11 @@ function RawDataViewer({ data, openKey, onToggle }: RawDataViewerProps) {
               </div>
             </button>
             {isOpen && (
-              <div className="px-5 pb-4 border-t border-slate-800/60">
+              <div className="px-5 pb-4 border-t border-ink-border">
                 <div className="relative mt-3">
                   <button
                     onClick={() => copyToClipboard(key, jsonStr)}
-                    className="absolute top-6 right-5 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-slate-700 bg-slate-900 text-xs font-medium text-slate-400 hover:border-slate-600 hover:text-slate-300 transition-colors cursor-pointer z-10"
+                    className="absolute top-6 right-5 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-ink-border bg-ink-elevated text-xs font-medium text-bone-muted hover:border-bone-subtle hover:text-bone transition-colors cursor-pointer z-10"
                     title="Copy to clipboard"
                   >
                     {copiedKey === key ? (
@@ -248,7 +248,7 @@ function RawDataViewer({ data, openKey, onToggle }: RawDataViewerProps) {
                       </>
                     )}
                   </button>
-                  <pre className="p-4 rounded-lg bg-slate-950 border border-slate-800/50 text-[11px] font-mono text-slate-400 overflow-x-auto overflow-y-auto max-h-[500px] leading-relaxed whitespace-pre">
+                  <pre className="p-4 rounded-lg bg-ink border border-ink-border text-[11px] font-mono text-bone-muted overflow-x-auto overflow-y-auto max-h-[500px] leading-relaxed whitespace-pre">
                     {jsonStr}
                   </pre>
                 </div>

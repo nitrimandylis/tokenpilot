@@ -81,7 +81,7 @@ function RawDataPageContent() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           <VendorBadge vendor={analysisRecord.vendor} size="small" />
-          <span className="text-sm text-slate-300 font-medium">
+          <span className="text-sm text-bone font-medium">
             {analysisRecord.orgName}
           </span>
         </div>
@@ -90,8 +90,8 @@ function RawDataPageContent() {
           disabled={isRefreshing}
           className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${
             isRefreshing
-              ? "text-slate-600 cursor-not-allowed"
-              : "text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 cursor-pointer"
+              ? "text-bone-subtle cursor-not-allowed"
+              : "text-moss hover:text-moss-light hover:bg-moss/10 cursor-pointer"
           }`}
           title="Refresh data from API"
         >
@@ -100,22 +100,22 @@ function RawDataPageContent() {
       </div>
 
       {/* Tab Switcher */}
-      <div className="flex items-center gap-1 border-b border-slate-800">
+      <div className="flex items-center gap-1 border-b border-ink-border">
         <Link
           href={`/history/${id}/recommendations?year=${year}&month=${month}`}
-          className="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px border-transparent text-slate-500 hover:text-slate-400"
+          className="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px border-transparent text-bone-subtle hover:text-bone"
         >
           Recommendations
         </Link>
         <Link
           href={`/history/${id}/analytics?year=${year}&month=${month}`}
-          className="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px border-transparent text-slate-500 hover:text-slate-400"
+          className="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px border-transparent text-bone-subtle hover:text-bone"
         >
           Analytics
         </Link>
         <Link
           href={`/history/${id}/raw-data?year=${year}&month=${month}`}
-          className="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px border-emerald-500 text-slate-200"
+          className="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px border-moss text-bone"
         >
           Raw API Data
         </Link>
@@ -123,10 +123,8 @@ function RawDataPageContent() {
 
       {/* Month Display */}
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wide">
-          Raw API Data
-        </h3>
-        <div className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-300">
+        <h3 className="text-sm font-semibold text-bone-subtle">Raw API Data</h3>
+        <div className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-bone">
           <svg
             className="w-4 h-4"
             fill="none"
@@ -145,7 +143,7 @@ function RawDataPageContent() {
       </div>
 
       {/* Stats */}
-      <div className="flex flex-wrap justify-between gap-y-6 rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
+      <div className="flex flex-wrap justify-between gap-y-6 rounded-2xl border border-ink-border bg-ink-elevated p-6">
         <Stat
           label="Monthly Spend"
           value={$(r.spend)}
@@ -178,10 +176,10 @@ function RawDataPageContent() {
       />
 
       {/* Admin API Documentation Link */}
-      <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-4">
+      <div className="rounded-lg border border-ink-border bg-ink/40 p-4">
         <div className="flex items-center gap-2 mb-2">
           <svg
-            className="w-4 h-4 text-slate-400"
+            className="w-4 h-4 text-bone-subtle"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -193,11 +191,11 @@ function RawDataPageContent() {
               d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
             />
           </svg>
-          <h3 className="text-sm font-semibold text-slate-300">
+          <h3 className="text-sm font-semibold text-bone">
             Admin API Documentation
           </h3>
         </div>
-        <p className="text-xs text-slate-400 mb-3">
+        <p className="text-xs text-bone-subtle mb-3">
           Learn more about the{" "}
           {analysisRecord.vendor === Vendor.ANTHROPIC ? "Anthropic" : "OpenAI"}{" "}
           Admin API endpoints and response formats.
@@ -210,7 +208,7 @@ function RawDataPageContent() {
           }
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 text-xs text-emerald-400 hover:text-emerald-300 transition-colors font-medium"
+          className="inline-flex items-center gap-1.5 text-xs text-moss hover:text-moss-light transition-colors font-medium"
         >
           View{" "}
           {analysisRecord.vendor === Vendor.ANTHROPIC ? "Anthropic" : "OpenAI"}{" "}
@@ -239,8 +237,8 @@ export default function RawDataPage() {
     <Suspense
       fallback={
         <div className="flex flex-col items-center pt-24">
-          <div className="w-8 h-8 border-2 border-emerald-500/30 border-t-emerald-400 rounded-full animate-spin mb-6" />
-          <p className="text-sm text-slate-300 font-medium">Loading...</p>
+          <div className="w-8 h-8 border-2 border-moss/30 border-t-moss rounded-full animate-spin mb-6" />
+          <p className="text-sm text-bone font-medium">Loading...</p>
         </div>
       }
     >
