@@ -477,9 +477,10 @@ export default function AnalyticsPage() {
             const projectSpend: Record<string, number> = {};
 
             for (const p of projectUsage) {
-              const pCost = tcOpenAI(p);
+              const pCost =
+                p.cost > 0 ? p.cost : tcOpenAI(p.model, p.inp, p.out);
               spend += pCost;
-              projectSpend[p.project_id] = pCost;
+              projectSpend[p.project_id || "default"] = pCost;
             }
 
             const projectsList = Object.entries(projectSpend)
