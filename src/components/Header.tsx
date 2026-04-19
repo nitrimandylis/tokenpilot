@@ -17,22 +17,24 @@ export default function Header({
   vendor,
 }: HeaderProps) {
   return (
-    <header className="sticky top-0 z-50 bg-slate-950 border-b border-slate-800/60">
+    <header className="sticky top-0 z-50 bg-ink border-b border-ink-border">
       <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
-        <Link className="flex items-center gap-3" href="/">
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center cursor-pointer">
-            <span className="text-[11px] font-black text-slate-950">TP</span>
-          </div>
-          <span className="text-base font-bold tracking-tight">TokenPilot</span>
+        <Link className="flex items-center gap-2.5" href="/">
+          <span
+            className="text-lg font-semibold font-display text-bone"
+            style={{ letterSpacing: "-0.03em" }}
+          >
+            TokenPilot
+          </span>
         </Link>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-4">
           {showGuide && (
             <Link
               href="/guide"
-              className={`text-xs font-semibold transition-colors ${
+              className={`text-sm font-sans transition-colors ${
                 currentPage === "guide"
-                  ? "text-emerald-400"
-                  : "text-slate-400 hover:text-slate-300"
+                  ? "text-bone border-b-2 border-moss pb-0.5"
+                  : "text-bone-subtle hover:text-bone"
               }`}
             >
               Guide
@@ -41,10 +43,10 @@ export default function Header({
           {showHistory && (
             <Link
               href="/history"
-              className={`text-xs font-semibold transition-colors ${
+              className={`text-sm font-sans transition-colors ${
                 currentPage === "history"
-                  ? "text-emerald-400"
-                  : "text-slate-400 hover:text-slate-300"
+                  ? "text-bone border-b-2 border-moss pb-0.5"
+                  : "text-bone-subtle hover:text-bone"
               }`}
             >
               History
@@ -53,9 +55,9 @@ export default function Header({
           {showNewReport && (
             <Link
               href={vendor ? `/?vendor=${vendor}` : "/"}
-              className="px-3 py-1.5 text-xs font-semibold text-slate-950 bg-emerald-500 hover:bg-emerald-400 rounded-lg transition-colors"
+              className="px-4 py-1.5 text-sm font-medium font-sans text-bone bg-moss hover:bg-moss-light rounded-sm transition-colors"
             >
-              Get New Report
+              Get new report →
             </Link>
           )}
         </div>

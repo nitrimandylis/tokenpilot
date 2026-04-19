@@ -40,10 +40,10 @@ export default function VendorBadge({
   if (vendor === Vendor.ANTHROPIC) {
     return (
       <div
-        className={`flex items-center justify-center bg-slate-500/10 border border-slate-500/20 rounded ${sizes.container} shrink-0 ${className}`}
+        className={`flex items-center justify-center bg-ink-elevated border border-ink-border rounded ${sizes.container} shrink-0 ${className}`}
       >
         <svg
-          className={`${sizes.anthropic} text-slate-200`}
+          className={`${sizes.anthropic} text-bone`}
           viewBox="0 0 92.2 65"
           fill="currentColor"
           xmlns="http://www.w3.org/2000/svg"
@@ -57,10 +57,10 @@ export default function VendorBadge({
   if (vendor === Vendor.OPENAI) {
     return (
       <div
-        className={`flex items-center justify-center bg-slate-500/10 border border-slate-500/20 rounded ${sizes.container} shrink-0 ${className}`}
+        className={`flex items-center justify-center bg-ink-elevated border border-ink-border rounded ${sizes.container} shrink-0 ${className}`}
       >
         <svg
-          className={`${sizes.openai} text-slate-200`}
+          className={`${sizes.openai} text-bone`}
           viewBox="0 0 24 24"
           fill="currentColor"
           xmlns="http://www.w3.org/2000/svg"
@@ -74,10 +74,10 @@ export default function VendorBadge({
   // Fallback for unknown vendor
   return (
     <div
-      className={`flex items-center justify-center bg-slate-500/10 border border-slate-500/20 rounded ${sizes.container} shrink-0 ${className}`}
+      className={`flex items-center justify-center bg-ink-elevated border border-ink-border rounded ${sizes.container} shrink-0 ${className}`}
     >
       <svg
-        className={`${sizes.fallback} text-slate-400`}
+        className={`${sizes.fallback} text-bone-subtle`}
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"

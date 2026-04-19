@@ -866,6 +866,7 @@ function RecommendationsPageContent() {
                           open={oid === f.id}
                           toggle={() => setOid(oid === f.id ? null : f.id)}
                           vendor={analysisRecord.vendor}
+                          index={key + 1}
                         />
                       ))}
                     </div>
