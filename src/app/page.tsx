@@ -14,6 +14,10 @@ import { tc } from "@/lib/anthropic/pricing";
 import { tcOpenAI } from "@/lib/openai/pricing";
 import type { Report } from "@/types";
 import Footer from "@/components/Footer";
+import { FadeUp } from "@/components/motion/FadeUp";
+import { StaggerChildren } from "@/components/motion/StaggerChildren";
+import { MagneticButton } from "@/components/motion/MagneticButton";
+import { Marquee } from "@/components/Marquee";
 
 function HomeContent() {
   const router = useRouter();
@@ -297,7 +301,7 @@ function HomeContent() {
 
       // Redirect to the new analysis
       router.push(`/history/${id}/recommendations?year=${year}&month=${month}`);
-    } catch (x: any) {
+    } catch (x: unknown) {
       const errorMsg =
         x instanceof Error ? x.message : "An unexpected error occurred";
       setErr(errorMsg);
@@ -306,126 +310,166 @@ function HomeContent() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans flex flex-col">
+    <div className="min-h-screen bg-ink text-bone font-sans flex flex-col">
       <Header currentPage="home" showNewReport={false} />
 
       <main className="flex-1 max-w-5xl mx-auto px-6 py-10 w-full">
         {!isAnalyzing ? (
-          <div className="flex flex-col items-center text-center pt-12">
-            {/* Vendor Selector */}
-            <div className="flex gap-2 p-1 rounded-lg bg-slate-900 border border-slate-800 mb-8">
-              <button
-                onClick={() => handleVendorChange(Vendor.ANTHROPIC)}
-                className={`px-6 py-2 text-sm font-semibold rounded-md transition-all cursor-pointer ${
-                  vendor === Vendor.ANTHROPIC
-                    ? "bg-slate-800 text-slate-100"
-                    : "text-slate-500 hover:text-slate-300"
-                }`}
-              >
-                Anthropic
-              </button>
-              <button
-                onClick={() => handleVendorChange(Vendor.OPENAI)}
-                className={`px-6 py-2 text-sm font-semibold rounded-md transition-all cursor-pointer ${
-                  vendor === Vendor.OPENAI
-                    ? "bg-slate-800 text-slate-100"
-                    : "text-slate-500 hover:text-slate-300"
-                }`}
-              >
-                OpenAI
-              </button>
+          <div className="flex flex-col items-center text-center pt-16 pb-16">
+            {/* Hero headline */}
+            <FadeUp>
+              <h1 className="font-display text-5xl sm:text-7xl font-bold text-bone text-center leading-none tracking-[-0.04em]">
+                Spend less.
+                <br />
+                <span className="text-bone bg-moss px-2">Ship more.</span>
+              </h1>
+            </FadeUp>
+            <FadeUp delay={0.1}>
+              <p className="mt-6 text-bone-muted max-w-md text-center text-base leading-relaxed font-sans">
+                Connect your Admin API key. TokenPilot surfaces dollar-accurate
+                optimization opportunities with confidence scores — in under 60
+                seconds.
+              </p>
+            </FadeUp>
+
+            {/* Marquee ticker */}
+            <div className="w-full overflow-hidden border-y border-ink-border my-8 py-3">
+              <Marquee className="text-xs font-mono text-bone-subtle">
+                {[
+                  "Claude Opus 4.7 · $15/MTok input",
+                  "Claude Sonnet 4.6 · $3/MTok input",
+                  "Claude Haiku 4.5 · $0.80/MTok input",
+                  "GPT-4o · $2.50/MTok input",
+                  "GPT-4o mini · $0.15/MTok input",
+                  "o3 · $10/MTok input",
+                  "Batch API · 50% discount",
+                  "Prompt caching · 90% discount on cache reads",
+                ].map((item, i) => (
+                  <span key={i} className="mx-8">
+                    {item} ·
+                  </span>
+                ))}
+              </Marquee>
             </div>
 
-            <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight">
-              Find the waste in your
-              <br />
-              <span className="text-emerald-400">
-                {vendor === Vendor.OPENAI
-                  ? "OpenAI API spend"
-                  : "Anthropic API spend"}
-              </span>
-            </h1>
-            <p className="mt-4 text-slate-400 max-w-md text-sm leading-relaxed">
-              Connect your Admin API key. TokenPilot analyzes real usage
-              patterns and surfaces dollar-accurate optimization opportunities
-              with confidence scores.
-            </p>
-            <div className="mt-8 flex gap-2 w-full max-w-lg">
-              <input
-                ref={inputRef}
-                type="password"
-                value={key}
-                onChange={(e) => setKey(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && startAnalysis()}
-                placeholder={
-                  vendor === Vendor.OPENAI ? "sk-admin-..." : "sk-ant-admin-..."
-                }
-                autoComplete="off"
-                autoFocus
-                data-1p-ignore
-                data-lpignore="true"
-                data-form-type="other"
-                className="flex-1 rounded-lg border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm font-mono text-slate-200 placeholder-slate-600 focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/30 outline-none transition"
-              />
-              <button
-                id="analyze-btn"
-                onClick={startAnalysis}
-                className="rounded-lg bg-emerald-500 px-6 py-2.5 text-sm font-bold text-slate-950 hover:bg-emerald-400 transition-colors cursor-pointer"
-              >
-                Analyze
-              </button>
-            </div>
-            <p className="mt-3 text-[11px] text-slate-600 font-mono">
-              {vendor === Vendor.OPENAI
-                ? "Platform → Settings → Admin Keys → Create new admin key (read-only)"
-                : "Console → API Keys → Admin Keys → Create admin key (read-only)"}
-            </p>
-            {err && (
-              <div className="mt-6 w-full max-w-lg rounded-lg border border-red-500/20 bg-red-500/5 p-4 text-left">
-                <p className="text-xs font-semibold mb-1 text-red-400">
-                  Connection Error
-                </p>
-                <p className="text-xs text-slate-400 font-mono break-all">
-                  {err}
-                </p>
-              </div>
-            )}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-16 w-full max-w-2xl">
-              {[
-                {
-                  t: "Find Hidden Waste in 60 Seconds",
-                  d: "Instantly identifies overpriced models, bloated RAG contexts, missing cache configs, and batch API opportunities most teams miss.",
-                },
-                {
-                  t: "Smart Recommendations, Not Guesses",
-                  d: "Weighted confidence scoring analyzes 5+ signals per finding. Only shows optimizations proven to work across 1000+ production workloads.",
-                },
-                {
-                  t: "Real Savings, Conservative Estimates",
-                  d: "Calculated from your actual token volumes, not theoretical benchmarks. High-confidence wins highlighted first—start saving today.",
-                },
-              ].map((f, i) => (
-                <div
-                  key={i}
-                  className="rounded-xl border border-slate-800 bg-slate-900/40 p-5"
-                >
-                  <h3 className="text-sm font-semibold text-slate-200">
-                    {f.t}
-                  </h3>
-                  <p className="mt-1.5 text-xs text-slate-500 leading-relaxed">
-                    {f.d}
-                  </p>
+            {/* Form: vendor selector + input */}
+            <FadeUp delay={0.2}>
+              <div className="flex flex-col items-center w-full max-w-lg">
+                {/* Vendor Selector */}
+                <div className="flex gap-1 p-1 rounded-sm bg-ink-elevated border border-ink-border mb-6">
+                  <button
+                    onClick={() => handleVendorChange(Vendor.ANTHROPIC)}
+                    className={`px-6 py-2 text-sm font-medium rounded-sm transition-all cursor-pointer ${
+                      vendor === Vendor.ANTHROPIC
+                        ? "bg-ink-border text-bone"
+                        : "text-bone-subtle hover:text-bone"
+                    }`}
+                  >
+                    Anthropic
+                  </button>
+                  <button
+                    onClick={() => handleVendorChange(Vendor.OPENAI)}
+                    className={`px-6 py-2 text-sm font-medium rounded-sm transition-all cursor-pointer ${
+                      vendor === Vendor.OPENAI
+                        ? "bg-ink-border text-bone"
+                        : "text-bone-subtle hover:text-bone"
+                    }`}
+                  >
+                    OpenAI
+                  </button>
                 </div>
-              ))}
-            </div>
+
+                {/* API key input + Analyze button */}
+                <div className="mt-0 flex gap-2 w-full max-w-lg">
+                  <input
+                    ref={inputRef}
+                    type="password"
+                    value={key}
+                    onChange={(e) => setKey(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && startAnalysis()}
+                    placeholder={
+                      vendor === Vendor.OPENAI
+                        ? "sk-admin-..."
+                        : "sk-ant-admin-..."
+                    }
+                    autoComplete="off"
+                    autoFocus
+                    data-1p-ignore
+                    data-lpignore="true"
+                    data-form-type="other"
+                    className="flex-1 rounded-sm border border-ink-border bg-ink-elevated px-4 py-2.5 text-sm font-mono text-bone placeholder-bone-subtle focus:border-moss/50 focus:ring-1 focus:ring-moss/30 outline-none transition"
+                  />
+                  <MagneticButton>
+                    <button
+                      id="analyze-btn"
+                      onClick={startAnalysis}
+                      className="rounded-sm bg-moss px-6 py-2.5 text-sm font-medium text-bone hover:bg-moss-light transition-colors cursor-pointer"
+                    >
+                      Analyze →
+                    </button>
+                  </MagneticButton>
+                </div>
+
+                {/* Key creation help text */}
+                <p className="mt-3 text-[11px] text-bone-subtle font-mono">
+                  {vendor === Vendor.OPENAI
+                    ? "Platform → Settings → Admin Keys → Create new admin key (read-only)"
+                    : "Console → API Keys → Admin Keys → Create admin key (read-only)"}
+                </p>
+
+                {/* Error display */}
+                {err && (
+                  <div className="mt-6 w-full max-w-lg rounded-sm border border-critical/30 bg-critical/5 p-4 text-left">
+                    <p className="text-xs font-semibold mb-1 text-critical">
+                      Connection error
+                    </p>
+                    <p className="text-xs text-bone-muted font-mono break-all">
+                      {err}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </FadeUp>
+
+            {/* Feature cards */}
+            <StaggerChildren>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-16 w-full max-w-2xl">
+                {[
+                  {
+                    t: "Find hidden waste in 60 seconds",
+                    d: "Instantly identifies overpriced models, bloated RAG contexts, missing cache configs, and batch API opportunities most teams miss.",
+                  },
+                  {
+                    t: "Smart recommendations, not guesses",
+                    d: "Weighted confidence scoring analyzes 5+ signals per finding. Only shows optimizations proven to work across production workloads.",
+                  },
+                  {
+                    t: "Real savings, conservative estimates",
+                    d: "Calculated from your actual token volumes, not theoretical benchmarks. High-confidence wins highlighted first.",
+                  },
+                ].map((f, i) => (
+                  <div
+                    key={i}
+                    className="rounded-sm border border-ink-border bg-ink-elevated p-5"
+                  >
+                    <h3 className="text-sm font-semibold text-bone font-sans">
+                      {f.t}
+                    </h3>
+                    <p className="mt-1.5 text-xs text-bone-subtle leading-relaxed font-sans">
+                      {f.d}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </StaggerChildren>
           </div>
         ) : (
           <div className="flex flex-col items-center pt-24">
-            <div className="w-8 h-8 border-2 border-emerald-500/30 border-t-emerald-400 rounded-full animate-spin mb-6" />
-            <p className="text-sm text-slate-300 font-medium">
+            <div className="w-8 h-8 border-2 border-moss/30 border-t-moss rounded-full animate-spin mb-6" />
+            <p className="text-sm text-bone font-medium">
               {step || "Connecting..."}
             </p>
-            <p className="text-xs text-slate-500 mt-2 font-mono">
+            <p className="text-xs text-bone-subtle mt-2 font-mono">
               {vendor === Vendor.OPENAI
                 ? "OpenAI Platform API · Read-only"
                 : "Anthropic Admin API · Read-only"}
@@ -443,9 +487,9 @@ export default function Home() {
   return (
     <Suspense
       fallback={
-        <div className="flex flex-col items-center justify-center min-h-screen">
-          <div className="w-8 h-8 border-2 border-emerald-500/30 border-t-emerald-400 rounded-full animate-spin mb-6" />
-          <p className="text-sm text-slate-300 font-medium">Loading...</p>
+        <div className="flex flex-col items-center justify-center min-h-screen bg-ink">
+          <div className="w-8 h-8 border-2 border-moss/30 border-t-moss rounded-full animate-spin mb-6" />
+          <p className="text-sm text-bone font-medium">Loading...</p>
         </div>
       }
     >
