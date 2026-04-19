@@ -32,7 +32,7 @@ function Row({ f, open, toggle, vendor, index }: RowProps) {
     >
       <button
         onClick={toggle}
-        className="w-full flex items-center gap-4 px-5 py-4 text-left hover:bg-[#1F1916] rounded-lg cursor-pointer transition-colors"
+        className="w-full flex items-center gap-4 px-5 py-4 text-left hover:bg-ink-hover rounded-lg cursor-pointer transition-colors"
       >
         {/* Index */}
         <span className="font-mono text-xs text-bone-subtle shrink-0 w-5">
@@ -547,10 +547,8 @@ batch = openai.batches.create(
                       </h4>
                       <p className="text-xs text-bone-muted mb-3">
                         ${f.cur.toFixed(2)}/mo spend across {f.activeDays}{" "}
-                        active day{f.activeDays !== 1 ? "s" : ""} — represents{" "}
-                        {((f.cur / (f.cur / 0.3)) * 100).toFixed(0)}% of total
-                        OpenAI spend. Even a 10-15% optimization here has
-                        significant cost impact.
+                        active day{f.activeDays !== 1 ? "s" : ""}. Even a 10-15%
+                        optimization here has significant cost impact.
                       </p>
                       <p className="text-[11px] text-bone-subtle mb-2">
                         Before: Current usage (${f.ml || f.model})
