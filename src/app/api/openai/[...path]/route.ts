@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 
+const MOCK_API_URL = process.env.MOCK_API_URL;
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ path: string[] }> }
 ) {
   try {
-    // Extract API key from headers
     const apiKey = request.headers.get("x-api-key");
 
     if (!apiKey) {
@@ -15,31 +16,31 @@ export async function GET(
       );
     }
 
-    // Await params in Next.js 16
     const { path: pathSegments } = await params;
-
-    // Construct the OpenAI API URL
     const path = pathSegments.join("/");
-    const url = new URL(`https://api.openai.com/${path}`);
 
-    // Forward query parameters
+    const baseUrl = MOCK_API_URL || "https://api.openai.com";
+    const url = new URL(`${baseUrl}/v1/${path}`);
+
     request.nextUrl.searchParams.forEach((value, key) => {
       url.searchParams.append(key, value);
     });
 
-    // Make request to OpenAI API
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+
+    if (!MOCK_API_URL) {
+      headers["Authorization"] = `Bearer ${apiKey}`;
+    }
+
     const response = await fetch(url.toString(), {
       method: "GET",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
+      headers,
     });
 
-    // Get response data
     const data = await response.json();
 
-    // Extract rate limit headers
     const rateLimitHeaders: Record<string, string> = {};
     const retryAfter = response.headers.get("retry-after");
     const rateLimitReset = response.headers.get("x-ratelimit-reset");
@@ -51,7 +52,6 @@ export async function GET(
       rateLimitHeaders["x-ratelimit-reset"] = rateLimitReset;
     }
 
-    // Return response with preserved headers
     return NextResponse.json(data, {
       status: response.status,
       headers: rateLimitHeaders,

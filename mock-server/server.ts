@@ -5,15 +5,20 @@ import {
   generateOpenAIProjects,
   generateOpenAIUsageData,
   generateOpenAICosts,
+  generateOpenAIOrg,
 } from "./data.ts";
 
 const PORT = 3456;
 
 function parseDateRange(url: URL): { year: number; month: number } {
   const startDate =
-    url.searchParams.get("start_date") || url.searchParams.get("start");
+    url.searchParams.get("start_date") ||
+    url.searchParams.get("start") ||
+    url.searchParams.get("start_time");
   const endDate =
-    url.searchParams.get("end_date") || url.searchParams.get("end");
+    url.searchParams.get("end_date") ||
+    url.searchParams.get("end") ||
+    url.searchParams.get("end_time");
 
   let year = new Date().getFullYear();
   let month = new Date().getMonth();
@@ -25,6 +30,18 @@ function parseDateRange(url: URL): { year: number; month: number } {
   }
 
   return { year, month };
+}
+
+function parseGroupBy(url: URL): string[] {
+  const groupBy = url.searchParams.get("group_by");
+  if (!groupBy) return [];
+  return groupBy.split(",");
+}
+
+function parseLimitPage(url: URL): { limit: number; page: number } {
+  const limit = parseInt(url.searchParams.get("limit") || "1000", 10);
+  const page = parseInt(url.searchParams.get("page") || "0", 10);
+  return { limit: Math.min(limit, 5000), page: Math.max(0, page) };
 }
 
 function handleAnthropic(path: string, method: string, url: URL): Response {
@@ -52,12 +69,10 @@ function handleAnthropic(path: string, method: string, url: URL): Response {
     segments[1] === "organizations" &&
     segments[2] === "workspaces"
   ) {
-    return new Response(
-      JSON.stringify({ workspaces: generateAnthropicWorkspaces() }),
-      {
-        headers: { "Content-Type": "application/json" },
-      }
-    );
+    const workspaces = generateAnthropicWorkspaces();
+    return new Response(JSON.stringify({ data: workspaces, has_more: false }), {
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
   if (
@@ -67,10 +82,25 @@ function handleAnthropic(path: string, method: string, url: URL): Response {
     segments[3] === "messages"
   ) {
     const { year, month } = parseDateRange(url);
-    const usage = generateAnthropicUsageData(year, month);
-    return new Response(JSON.stringify({ usage }), {
-      headers: { "Content-Type": "application/json" },
+    const group_by = parseGroupBy(url);
+    const { limit, page } = parseLimitPage(url);
+
+    const usage = generateAnthropicUsageData(year, month, {
+      group_by,
+      limit,
+      page,
     });
+
+    return new Response(
+      JSON.stringify({
+        usage: usage.data,
+        has_more: usage.has_more,
+        next_page: usage.next_page,
+      }),
+      {
+        headers: { "Content-Type": "application/json" },
+      }
+    );
   }
 
   return new Response(JSON.stringify({ error: "Not found" }), {
@@ -108,11 +138,27 @@ function handleOpenAI(path: string, method: string, url: URL): Response {
     segments[2] === "usage"
   ) {
     const { year, month } = parseDateRange(url);
-    const usage = generateOpenAIUsageData(year, month);
+    const endpoint = segments[3] || undefined;
+    const group_by = parseGroupBy(url);
+    const { limit, page } = parseLimitPage(url);
 
-    return new Response(JSON.stringify({ data: usage, has_more: false }), {
-      headers: { "Content-Type": "application/json" },
+    const usage = generateOpenAIUsageData(year, month, {
+      endpoint,
+      group_by,
+      limit,
+      page,
     });
+
+    return new Response(
+      JSON.stringify({
+        data: usage.data,
+        has_more: usage.has_more,
+        next_page: usage.next_page,
+      }),
+      {
+        headers: { "Content-Type": "application/json" },
+      }
+    );
   }
 
   if (
@@ -124,6 +170,13 @@ function handleOpenAI(path: string, method: string, url: URL): Response {
     const costs = generateOpenAICosts(year, month);
 
     return new Response(JSON.stringify(costs), {
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  if (segments[0] === "v1" && segments[1] === "organization") {
+    const org = generateOpenAIOrg();
+    return new Response(JSON.stringify(org), {
       headers: { "Content-Type": "application/json" },
     });
   }
@@ -165,16 +218,27 @@ Bun.serve({
 });
 
 console.log(`Mock API server running at http://localhost:${PORT}`);
+console.log(`Anthropic endpoints:`);
+console.log(`  http://localhost:${PORT}/api/anthropic/v1/organizations/me`);
 console.log(
-  `Anthropic endpoints: http://localhost:${PORT}/api/anthropic/v1/organizations/me`
+  `  http://localhost:${PORT}/api/anthropic/v1/organizations/workspaces`
 );
 console.log(
-  `OpenAI endpoints: http://localhost:${PORT}/api/openai/v1/organization/projects`
+  `  http://localhost:${PORT}/api/anthropic/v1/organizations/usage_report/messages`
 );
-console.log(`\nTo test with date range:`);
+console.log(`\nOpenAI endpoints:`);
+console.log(`  http://localhost:${PORT}/api/openai/v1/organization/projects`);
 console.log(
-  `http://localhost:${PORT}/api/anthropic/v1/organizations/usage_report/messages?start_date=2026-01-01&end_date=2026-12-31`
+  `  http://localhost:${PORT}/api/openai/v1/organization/usage/completions`
 );
 console.log(
-  `http://localhost:${PORT}/api/openai/v1/organization/usage?start=2026-01-01&end=2026-12-31`
+  `  http://localhost:${PORT}/api/openai/v1/organization/usage/embeddings`
+);
+console.log(`  http://localhost:${PORT}/api/openai/v1/organization/costs`);
+console.log(`\nWith date range and pagination:`);
+console.log(
+  `http://localhost:${PORT}/api/anthropic/v1/organizations/usage_report/messages?start_date=2026-01-01&end_date=2026-12-31&limit=100&page=0`
+);
+console.log(
+  `http://localhost:${PORT}/api/openai/v1/organization/usage/completions?start_time=1735689600&end_time=1738368000&limit=100&page=0`
 );
