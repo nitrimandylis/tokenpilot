@@ -24,9 +24,18 @@ function parseDateRange(url: URL): { year: number; month: number } {
   let month = new Date().getMonth();
 
   if (startDate) {
-    const d = new Date(startDate);
-    year = d.getFullYear();
-    month = d.getMonth();
+    let d: Date;
+    // Check if it's a Unix timestamp (numeric string)
+    if (/^\d+$/.test(startDate)) {
+      // Unix timestamp in seconds
+      d = new Date(parseInt(startDate) * 1000);
+    } else {
+      d = new Date(startDate);
+    }
+    if (!isNaN(d.getTime())) {
+      year = d.getFullYear();
+      month = d.getMonth();
+    }
   }
 
   return { year, month };
@@ -191,11 +200,11 @@ Bun.serve({
   port: PORT,
   async fetch(req) {
     const url = new URL(req.url);
-    const path = url.pathname.replace("/api/", "").replace("/v1/", "");
     const method = req.method;
 
     console.log(`${method} ${url.pathname}`);
 
+    // Handle direct mock server calls (/api/anthropic/... or /api/openai/...)
     if (url.pathname.startsWith("/api/anthropic")) {
       const anthPath = url.pathname
         .replace("/api/anthropic/", "")
@@ -207,6 +216,21 @@ Bun.serve({
       const openaiPath = url.pathname
         .replace("/api/openai/", "")
         .replace("/api/openai", "");
+      return handleOpenAI(openaiPath, method, url);
+    }
+
+    // Handle paths forwarded from Next.js (without /api/ prefix)
+    // Check plural forms first to avoid prefix matching issues
+    if (url.pathname.startsWith("/v1/organizations")) {
+      const anthPath = url.pathname.slice(1);
+      return handleAnthropic(anthPath, method, url);
+    }
+
+    if (
+      url.pathname.startsWith("/v1/organization") &&
+      !url.pathname.startsWith("/v1/organizations")
+    ) {
+      const openaiPath = url.pathname.slice(1);
       return handleOpenAI(openaiPath, method, url);
     }
 
