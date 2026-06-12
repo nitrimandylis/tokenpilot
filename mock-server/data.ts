@@ -18,11 +18,18 @@ export interface AnthropicUsageEntry {
   bucket_start: string;
   input_tokens: number;
   output_tokens: number;
-  cache_read_tokens: number;
+  cache_read_input_tokens: number;
   model: string;
   api_key_id: string;
   workspace_id: string;
   request_count?: number;
+}
+
+// Real Admin API shape: data[] of time buckets, each with results[]
+export interface AnthropicUsageBucket {
+  starting_at: string;
+  ending_at: string;
+  results: AnthropicUsageEntry[];
 }
 
 export interface OpenAIProject {
@@ -30,6 +37,13 @@ export interface OpenAIProject {
   name: string;
   created_at: number;
   organization_id: string;
+}
+
+export interface OpenAIUsageBucket {
+  object: string;
+  start_time: number;
+  end_time: number;
+  results: OpenAIUsageEntry[];
 }
 
 export interface OpenAIUsageEntry {
@@ -50,6 +64,88 @@ export interface PaginatedResult<T> {
   data: T[];
   has_more: boolean;
   next_page?: string;
+}
+
+// --- Business profile simulation ---
+// Each "analysis run" gets a randomly generated business profile (company
+// size, caching habits, weekend traffic, volatility). All generators draw
+// from a PRNG seeded by profile + month + endpoint, so the same month is
+// reproducible within one profile but differs across profiles.
+
+export interface BusinessProfile {
+  seed: number;
+  orgName: string;
+  scale: number; // overall company size multiplier
+  cacheAffinity: number; // multiplier on cache read rates
+  weekendFactor: number; // fraction of weekday traffic kept on weekends
+  volatility: number; // widens daily variation
+}
+
+const ORG_NAMES = [
+  "Acme Corp",
+  "Northwind Labs",
+  "Vertex Dynamics",
+  "BlueHarbor AI",
+  "Quantra Systems",
+  "Helio Industries",
+  "Mosswood Software",
+  "Ironclad Analytics",
+  "Skyline Robotics",
+  "Cobalt & Finch",
+];
+
+function mulberry32(seed: number): () => number {
+  return function () {
+    seed |= 0;
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// All data generators draw from this; reseeded per generator call
+let rand: () => number = Math.random;
+
+function hashStr(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) {
+    h = (Math.imul(h, 31) + s.charCodeAt(i)) | 0;
+  }
+  return h;
+}
+
+function seedFor(
+  profile: BusinessProfile,
+  year: number,
+  month: number,
+  tag: string
+): void {
+  rand = mulberry32(profile.seed ^ (year * 12 + month) ^ hashStr(tag));
+}
+
+export function generateBusinessProfile(
+  seed: number = Math.floor(Math.random() * 2 ** 31)
+): BusinessProfile {
+  const r = mulberry32(seed);
+  return {
+    seed,
+    orgName: ORG_NAMES[Math.floor(r() * ORG_NAMES.length)],
+    scale: 0.25 + r() * r() * 8, // skewed: most companies small, a few big
+    cacheAffinity: 0.2 + r() * 1.6,
+    weekendFactor: 0.1 + r() * 0.7,
+    volatility: 0.6 + r() * 0.8,
+  };
+}
+
+let activeProfile: BusinessProfile = generateBusinessProfile();
+
+export function setActiveProfile(p: BusinessProfile): void {
+  activeProfile = p;
+}
+
+export function getActiveProfile(): BusinessProfile {
+  return activeProfile;
 }
 
 const WORKSPACES = ["ws_01H7XYZABCDEF12345678", "ws_01H7XYZBARK987654321"];
@@ -81,7 +177,7 @@ export function paginateArray<T>(
 export function generateAnthropicOrg(): AnthropicOrg {
   return {
     id: "org_01H7XYZ1234567890ABCD",
-    name: "Acme Corp",
+    name: activeProfile.orgName,
     workspace_uids: WORKSPACES,
     created_at: 1709251200,
   };
@@ -109,7 +205,7 @@ export function generateAnthropicWorkspaces(): AnthropicWorkspace[] {
 }
 
 function randomVariation(): number {
-  return 0.5 + Math.random() * 1.0;
+  return 0.5 + rand() * activeProfile.volatility;
 }
 
 export function generateAnthropicUsageData(
@@ -120,8 +216,11 @@ export function generateAnthropicUsageData(
     limit?: number;
     page?: number;
   } = {}
-): PaginatedResult<AnthropicUsageEntry> {
+): PaginatedResult<AnthropicUsageBucket> {
   const { group_by = [], limit = 1000, page = 0 } = options;
+  // Same seed regardless of group_by so the 3 parallel pulls stay consistent
+  seedFor(activeProfile, year, month, "anthropic-usage");
+  const scale = activeProfile.scale;
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const entries: AnthropicUsageEntry[] = [];
 
@@ -170,62 +269,54 @@ export function generateAnthropicUsageData(
     const isMonday = date.getDay() === 1;
     const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}T00:00:00Z`;
 
-    const scenario = Math.random();
+    const scenario = rand();
 
     for (const model of models) {
-      const workspace =
-        WORKSPACES[Math.floor(Math.random() * WORKSPACES.length)];
-      const apiKey = API_KEYS[Math.floor(Math.random() * API_KEYS.length)];
+      const workspace = WORKSPACES[Math.floor(rand() * WORKSPACES.length)];
+      const apiKey = API_KEYS[Math.floor(rand() * API_KEYS.length)];
 
       let inputTokens: number;
       let outputTokens: number;
       let cacheReadTokens: number;
       let requestCount: number;
 
-      const weekendMultiplier = isWeekend ? 0.3 : 1;
+      const weekendMultiplier = isWeekend ? activeProfile.weekendFactor : 1;
 
       if (scenario < 0.15) {
-        const lowOutput = 50 + Math.random() * 100;
+        const lowOutput = 50 + rand() * 100;
         inputTokens = Math.floor(2000 * weekendMultiplier * randomVariation());
         outputTokens = Math.floor(
           lowOutput * weekendMultiplier * randomVariation()
         );
         requestCount = Math.floor(80 * weekendMultiplier * randomVariation());
-        cacheReadTokens = Math.floor(
-          inputTokens * (0.02 + Math.random() * 0.03)
-        );
+        cacheReadTokens = Math.floor(inputTokens * (0.02 + rand() * 0.03));
       } else if (scenario < 0.3) {
-        const highInput = 15000 + Math.random() * 10000;
+        const highInput = 15000 + rand() * 10000;
         inputTokens = Math.floor(
           highInput * weekendMultiplier * randomVariation()
         );
         outputTokens = Math.floor(400 * weekendMultiplier * randomVariation());
         requestCount = Math.floor(30 * weekendMultiplier * randomVariation());
-        cacheReadTokens = Math.floor(
-          inputTokens * (0.15 + Math.random() * 0.25)
-        );
+        cacheReadTokens = Math.floor(inputTokens * (0.15 + rand() * 0.25));
       } else if (scenario < 0.45) {
         inputTokens = Math.floor(25000 * weekendMultiplier * randomVariation());
         outputTokens = Math.floor(2500 * weekendMultiplier * randomVariation());
         requestCount = Math.floor(150 * weekendMultiplier * randomVariation());
-        cacheReadTokens = Math.floor(
-          inputTokens * (0.01 + Math.random() * 0.03)
-        );
+        cacheReadTokens = Math.floor(inputTokens * (0.01 + rand() * 0.03));
       } else if (scenario < 0.55) {
         inputTokens = Math.floor(8000 * weekendMultiplier * randomVariation());
         outputTokens = Math.floor(2000 * weekendMultiplier * randomVariation());
         requestCount = Math.floor(
           200 * weekendMultiplier * (isMonday ? 1.5 : 0.7)
         );
-        cacheReadTokens = Math.floor(inputTokens * (0.1 + Math.random() * 0.3));
+        cacheReadTokens = Math.floor(inputTokens * (0.1 + rand() * 0.3));
       } else if (scenario < 0.65) {
         const legacyModels = [
           "claude-3-opus-20240229",
           "claude-3-sonnet-20240229",
         ];
         const useLegacy =
-          model.name ===
-          legacyModels[Math.floor(Math.random() * legacyModels.length)];
+          model.name === legacyModels[Math.floor(rand() * legacyModels.length)];
         if (useLegacy) {
           inputTokens = Math.floor(
             6000 * weekendMultiplier * randomVariation()
@@ -245,9 +336,7 @@ export function generateAnthropicUsageData(
             model.baseOutput * weekendMultiplier * randomVariation()
           );
           requestCount = Math.floor(80 * weekendMultiplier * randomVariation());
-          cacheReadTokens = Math.floor(
-            inputTokens * (0.1 + Math.random() * 0.3)
-          );
+          cacheReadTokens = Math.floor(inputTokens * (0.1 + rand() * 0.3));
         }
       } else {
         inputTokens = Math.floor(
@@ -257,25 +346,44 @@ export function generateAnthropicUsageData(
           model.baseOutput * weekendMultiplier * randomVariation()
         );
         requestCount = Math.floor(80 * weekendMultiplier * randomVariation());
-        cacheReadTokens = Math.floor(inputTokens * (0.1 + Math.random() * 0.3));
+        cacheReadTokens = Math.floor(inputTokens * (0.1 + rand() * 0.3));
       }
 
       if (inputTokens === 0 && outputTokens === 0) continue;
 
+      const scaledInput = Math.floor(inputTokens * scale);
       entries.push({
         bucket_start: dateStr,
-        input_tokens: inputTokens,
-        output_tokens: outputTokens,
-        cache_read_tokens: cacheReadTokens,
+        input_tokens: scaledInput,
+        output_tokens: Math.floor(outputTokens * scale),
+        cache_read_input_tokens: Math.min(
+          Math.floor(cacheReadTokens * scale * activeProfile.cacheAffinity),
+          Math.floor(scaledInput * 0.9)
+        ),
         model: model.name,
         api_key_id: apiKey,
         workspace_id: workspace,
-        request_count: requestCount,
+        request_count: Math.max(1, Math.floor(requestCount * scale)),
       });
     }
   }
 
-  return paginateArray(entries, limit, page);
+  // Group flat entries into per-day buckets matching the real API shape
+  const byDay = new Map<string, AnthropicUsageEntry[]>();
+  for (const e of entries) {
+    const list = byDay.get(e.bucket_start) ?? [];
+    list.push(e);
+    byDay.set(e.bucket_start, list);
+  }
+  const buckets: AnthropicUsageBucket[] = [...byDay.entries()].map(
+    ([start, results]) => ({
+      starting_at: start,
+      ending_at: new Date(new Date(start).getTime() + 86400000).toISOString(),
+      results,
+    })
+  );
+
+  return paginateArray(buckets, limit, page);
 }
 
 export function generateOpenAIProjects(): OpenAIProject[] {
@@ -372,8 +480,11 @@ export function generateOpenAIUsageData(
     limit?: number;
     page?: number;
   } = {}
-): PaginatedResult<OpenAIUsageEntry> {
+): PaginatedResult<OpenAIUsageBucket> {
   const { endpoint, limit = 1000, page = 0 } = options;
+  // Seed includes endpoint so repeat fetches of the same service match
+  seedFor(activeProfile, year, month, `openai-usage:${endpoint ?? "all"}`);
+  const scale = activeProfile.scale;
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const entries: OpenAIUsageEntry[] = [];
 
@@ -387,15 +498,14 @@ export function generateOpenAIUsageData(
     const isMonday = date.getDay() === 1;
     const timestamp = Math.floor(date.getTime() / 1000);
 
-    const scenario = Math.random();
+    const scenario = rand();
 
     for (const service of services) {
-      if (Math.random() > 0.7) continue;
+      if (rand() > 0.7) continue;
 
-      const project = PROJECTS[Math.floor(Math.random() * PROJECTS.length)];
-      const model =
-        service.models[Math.floor(Math.random() * service.models.length)];
-      const weekendMultiplier = isWeekend ? 0.4 : 1;
+      const project = PROJECTS[Math.floor(rand() * PROJECTS.length)];
+      const model = service.models[Math.floor(rand() * service.models.length)];
+      const weekendMultiplier = isWeekend ? activeProfile.weekendFactor : 1;
 
       let tokens: number;
       let cost: number;
@@ -403,7 +513,7 @@ export function generateOpenAIUsageData(
 
       if (service.endpoint === "completions") {
         if (scenario < 0.15) {
-          const lowOutput = 50 + Math.random() * 150;
+          const lowOutput = 50 + rand() * 150;
           tokens = Math.floor(2500 * weekendMultiplier * randomVariation());
           const outTokens = Math.floor(
             lowOutput * weekendMultiplier * randomVariation()
@@ -411,7 +521,7 @@ export function generateOpenAIUsageData(
           cost = (tokens * 0.7 + outTokens * 0.3) * (service.baseCost / 1000);
           numRequests = Math.floor(80 * weekendMultiplier * randomVariation());
         } else if (scenario < 0.3) {
-          const highInput = 15000 + Math.random() * 10000;
+          const highInput = 15000 + rand() * 10000;
           tokens = Math.floor(
             highInput * weekendMultiplier * randomVariation()
           );
@@ -481,51 +591,113 @@ export function generateOpenAIUsageData(
 
       if (cost === 0 && tokens === 0) continue;
 
+      const scaledTokens = Math.floor(tokens * scale);
       entries.push({
-        id: `usage_${year}${String(month + 1).padStart(2, "0")}${String(day).padStart(2, "0")}_${Math.random().toString(36).slice(2, 10)}`,
+        id: `usage_${year}${String(month + 1).padStart(2, "0")}${String(day).padStart(2, "0")}_${rand().toString(36).slice(2, 10)}`,
         bucket_start_time: timestamp,
         service_tier: "standard",
         endpoint: service.endpoint,
         model,
-        input_tokens: Math.floor(tokens * 0.7),
-        output_tokens: Math.floor(tokens * 0.3),
-        total_tokens: tokens,
-        cost: parseFloat(cost.toFixed(6)),
+        input_tokens: Math.floor(scaledTokens * 0.7),
+        output_tokens: Math.floor(scaledTokens * 0.3),
+        total_tokens: scaledTokens,
+        cost: parseFloat((cost * scale).toFixed(6)),
         project_id: project,
-        num_model_requests: numRequests,
+        num_model_requests: Math.max(1, Math.floor(numRequests * scale)),
       });
     }
   }
 
-  return paginateArray(entries, limit, page);
+  // Group flat entries into per-day buckets matching the real API shape
+  const byDay = new Map<number, OpenAIUsageEntry[]>();
+  for (const e of entries) {
+    const list = byDay.get(e.bucket_start_time) ?? [];
+    list.push(e);
+    byDay.set(e.bucket_start_time, list);
+  }
+  const buckets: OpenAIUsageBucket[] = [...byDay.entries()].map(
+    ([start, results]) => ({
+      object: "bucket",
+      start_time: start,
+      end_time: start + 86400,
+      results,
+    })
+  );
+
+  return paginateArray(buckets, limit, page);
 }
 
 export function generateOpenAICosts(
   year: number,
   month: number
-): { total_cost: number; items: { name: string; cost: number }[] } {
-  const items = [
-    { name: "GPT-4o", cost: 847.32 + Math.random() * 200 },
-    { name: "GPT-4o-mini", cost: 124.55 + Math.random() * 50 },
-    { name: "o1-preview", cost: 234.1 + Math.random() * 100 },
-    { name: "Embeddings", cost: 56.78 + Math.random() * 20 },
-    { name: "Whisper", cost: 34.21 + Math.random() * 10 },
-    { name: "DALL-E 3", cost: 89.45 + Math.random() * 30 },
-    { name: "TTS", cost: 23.67 + Math.random() * 10 },
-    { name: "Moderations", cost: 12.34 + Math.random() * 5 },
+): {
+  object: string;
+  data: Array<{
+    object: string;
+    start_time: number;
+    end_time: number;
+    results: Array<{
+      object: string;
+      amount: { value: number; currency: string };
+      line_item: string;
+      project_id: string;
+      project_name: string;
+      organization_id: string;
+      organization_name: string;
+    }>;
+  }>;
+  has_more: boolean;
+} {
+  const lineItems = [
+    { name: "gpt-4o", baseDaily: 28.2 },
+    { name: "gpt-4o-mini", baseDaily: 4.1 },
+    { name: "o1-preview", baseDaily: 7.8 },
+    { name: "text-embedding-3-small", baseDaily: 1.9 },
+    { name: "whisper-1", baseDaily: 1.1 },
+    { name: "dall-e-3", baseDaily: 3.0 },
+    { name: "tts-1", baseDaily: 0.8 },
+    { name: "omni-moderation-latest", baseDaily: 0.4 },
   ];
 
-  const total = items.reduce((sum, item) => sum + item.cost, 0);
+  seedFor(activeProfile, year, month, "openai-costs");
+  const scale = activeProfile.scale;
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const data = [];
 
-  return {
-    total_cost: parseFloat(total.toFixed(2)),
-    items: items.map((i) => ({ ...i, cost: parseFloat(i.cost.toFixed(2)) })),
-  };
+  for (let day = 1; day <= daysInMonth; day++) {
+    const start = Math.floor(new Date(year, month, day).getTime() / 1000);
+    const end = Math.floor(new Date(year, month, day + 1).getTime() / 1000);
+
+    const results = lineItems.map((item, i) => ({
+      object: "organization.costs.result",
+      amount: {
+        value: parseFloat(
+          (item.baseDaily * scale * (0.7 + rand() * 0.6)).toFixed(4)
+        ),
+        currency: "usd",
+      },
+      line_item: item.name,
+      project_id: PROJECTS[i % PROJECTS.length],
+      project_name:
+        i % PROJECTS.length === 0 ? "Main App" : "Analytics Service",
+      organization_id: "org_abc123",
+      organization_name: activeProfile.orgName,
+    }));
+
+    data.push({
+      object: "bucket",
+      start_time: start,
+      end_time: end,
+      results,
+    });
+  }
+
+  return { object: "page", data, has_more: false };
 }
 
 export function generateOpenAIOrg(): { id: string; name: string } {
   return {
     id: "org_abc123",
-    name: "Acme Corp",
+    name: activeProfile.orgName,
   };
 }

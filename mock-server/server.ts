@@ -6,9 +6,29 @@ import {
   generateOpenAIUsageData,
   generateOpenAICosts,
   generateOpenAIOrg,
+  generateBusinessProfile,
+  setActiveProfile,
+  getActiveProfile,
 } from "./data.ts";
 
 const PORT = 3456;
+
+// Requests within one analysis arrive in a rapid burst; an idle gap means
+// the user clicked Analyze again — simulate a different business each time.
+const PROFILE_IDLE_MS = 15_000;
+let lastRequestAt = 0;
+
+function rotateProfileIfIdle(): void {
+  const now = Date.now();
+  if (now - lastRequestAt > PROFILE_IDLE_MS) {
+    setActiveProfile(generateBusinessProfile());
+    const p = getActiveProfile();
+    console.log(
+      `New business profile: ${p.orgName} (scale ${p.scale.toFixed(2)}x, cache ${p.cacheAffinity.toFixed(2)}, weekend ${p.weekendFactor.toFixed(2)}, volatility ${p.volatility.toFixed(2)})`
+    );
+  }
+  lastRequestAt = now;
+}
 
 function parseDateRange(url: URL): { year: number; month: number } {
   const startDate =
@@ -102,7 +122,7 @@ function handleAnthropic(path: string, method: string, url: URL): Response {
 
     return new Response(
       JSON.stringify({
-        usage: usage.data,
+        data: usage.data,
         has_more: usage.has_more,
         next_page: usage.next_page,
       }),
@@ -202,6 +222,7 @@ Bun.serve({
     const url = new URL(req.url);
     const method = req.method;
 
+    rotateProfileIfIdle();
     console.log(`${method} ${url.pathname}`);
 
     // Handle direct mock server calls (/api/anthropic/... or /api/openai/...)

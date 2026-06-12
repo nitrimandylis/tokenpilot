@@ -20,7 +20,8 @@ export async function GET(
     const path = pathSegments.join("/");
 
     const baseUrl = MOCK_API_URL || "https://api.openai.com";
-    const url = new URL(`${baseUrl}/v1/${path}`);
+    // Client endpoint strings may already include the v1 prefix
+    const url = new URL(`${baseUrl}/v1/${path.replace(/^v1\//, "")}`);
 
     request.nextUrl.searchParams.forEach((value, key) => {
       url.searchParams.append(key, value);
