@@ -289,12 +289,6 @@ export async function pull(
           service: endpointName,
         }))
       );
-
-      if (pageCount > 1) {
-        console.log(
-          `[OpenAI API] Fetched ${pageCount} pages for ${endpointName}`
-        );
-      }
     } catch (e: any) {
       const endpointName = endpoint.split("/").pop()!;
       raw[endpointName] = {
@@ -307,9 +301,6 @@ export async function pull(
   }
 
   const usage: OpenAIUsageData = { data: allUsageData as any };
-  console.log(
-    `[OpenAI API] Fetched ${allUsageData.length} total usage records across all services`
-  );
 
   log("Fetching projects...");
 

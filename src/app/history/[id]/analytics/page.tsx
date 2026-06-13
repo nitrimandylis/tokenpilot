@@ -31,7 +31,7 @@ export default function AnalyticsPage() {
     searchParams.get("year") || new Date().getFullYear().toString()
   );
 
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isRefreshing, _setIsRefreshing] = useState(false);
   const [showYearPicker, setShowYearPicker] = useState(false);
   const [isFetchingYear, setIsFetchingYear] = useState(false);
   const [analysisRecord, setAnalysisRecord] = useState(() =>
@@ -72,16 +72,9 @@ export default function AnalyticsPage() {
     ) {
       const apiKey = getKey(analysisRecord.vendor);
       if (!apiKey) {
-        console.log(
-          "[Analytics] Missing months but no API key available:",
-          missingMonths
-        );
         return;
       }
 
-      console.log(
-        `[Analytics] Fetching entire year ${year} data in one request to avoid rate limits`
-      );
       setIsFetchingYear(true);
 
       const fetchYearData = async () => {
@@ -101,10 +94,6 @@ export default function AnalyticsPage() {
 
           const starting_at = startDate.toISOString().split(".")[0] + "Z";
           const ending_at = endDate.toISOString().split(".")[0] + "Z";
-
-          console.log(
-            `[Analytics] Fetching from ${startDate.toISOString()} to ${endDate.toISOString()}`
-          );
 
           // Fetch organization info
           let org: any = { id: "", name: "Organization" };
@@ -133,7 +122,6 @@ export default function AnalyticsPage() {
           }
 
           // Fetch usage data for entire year (3 calls with pagination)
-          console.log("[Analytics] Fetching usage by model...");
           const bkRaw = await fetchAllPages(
             apiKey,
             "/v1/organizations/usage_report/messages",
@@ -145,7 +133,6 @@ export default function AnalyticsPage() {
             }
           );
 
-          console.log("[Analytics] Fetching usage by model+key...");
           const bmRaw = await fetchAllPages(
             apiKey,
             "/v1/organizations/usage_report/messages",
@@ -157,7 +144,6 @@ export default function AnalyticsPage() {
             }
           );
 
-          console.log("[Analytics] Fetching usage by workspace+model...");
           const bwRaw = await fetchAllPages(
             apiKey,
             "/v1/organizations/usage_report/messages",
@@ -167,10 +153,6 @@ export default function AnalyticsPage() {
               group_by: ["workspace_id", "model"],
               bucket_width: "day",
             }
-          );
-
-          console.log(
-            `[Analytics] Fetched ${bkRaw.length + bmRaw.length + bwRaw.length} total usage buckets for entire year`
           );
 
           // Group usage buckets by month
@@ -195,10 +177,6 @@ export default function AnalyticsPage() {
             const bk = bkByMonth[m] || [];
             const bm = bmByMonth[m] || [];
             const bw = bwByMonth[m] || [];
-
-            console.log(
-              `[Analytics] Processing month ${year}-${m} with ${bk.length + bm.length + bw.length} buckets`
-            );
 
             // Aggregate and analyze
             const bkAgg = agg(bk);
@@ -272,8 +250,6 @@ export default function AnalyticsPage() {
               report,
               { ...raw, bk, bm, bw }
             );
-
-            console.log(`[Analytics] ✓ Saved month ${year}-${m}`);
           }
 
           // Reload from storage to get updated data
@@ -292,16 +268,9 @@ export default function AnalyticsPage() {
     ) {
       const apiKey = getKey(analysisRecord.vendor);
       if (!apiKey) {
-        console.log(
-          "[Analytics] Missing months but no API key available:",
-          missingMonths
-        );
         return;
       }
 
-      console.log(
-        `[Analytics] Fetching entire year ${year} data in one request to avoid rate limits`
-      );
       setIsFetchingYear(true);
 
       const fetchYearData = async () => {
@@ -322,10 +291,6 @@ export default function AnalyticsPage() {
 
           const start_time = Math.floor(startDate.getTime() / 1000);
           const end_time = Math.floor(endDate.getTime() / 1000);
-
-          console.log(
-            `[Analytics] Fetching from ${startDate.toISOString()} to ${endDate.toISOString()}`
-          );
 
           // Fetch all service endpoints for the entire year
           const usageEndpoints = [
@@ -414,12 +379,6 @@ export default function AnalyticsPage() {
                   break;
                 }
               } while (nextPage);
-
-              if (pageCount > 1) {
-                console.log(
-                  `[Analytics] Fetched ${pageCount} pages for ${endpointName}`
-                );
-              }
             } catch (e: any) {
               console.error(`[Analytics] Failed to fetch ${endpoint}:`, e);
               const endpointName = endpoint.split("/").pop()!;
@@ -443,10 +402,6 @@ export default function AnalyticsPage() {
             raw.projects = { error: e.message };
           }
 
-          console.log(
-            `[Analytics] Fetched ${allUsageData.length} usage records for entire year`
-          );
-
           // Group usage data by month
           const usageByMonth: Record<number, any[]> = {};
           for (const record of allUsageData) {
@@ -466,10 +421,6 @@ export default function AnalyticsPage() {
           // Process and save each month
           for (const m of missingMonths) {
             const monthUsageData = usageByMonth[m] || [];
-            console.log(
-              `[Analytics] Processing month ${year}-${m} with ${monthUsageData.length} records`
-            );
-
             const usage = { data: monthUsageData };
             const projectUsage = aggOpenAI(usage);
             const findings = findIssuesOpenAI(projectUsage, projects);
@@ -522,8 +473,6 @@ export default function AnalyticsPage() {
               report,
               { ...raw, usage }
             );
-
-            console.log(`[Analytics] ✓ Saved month ${year}-${m}`);
           }
 
           // Reload from storage to get updated data

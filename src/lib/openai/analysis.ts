@@ -193,18 +193,11 @@ export function findIssuesOpenAI(
     (sum, r) => sum + (r.cost > 0 ? r.cost : tcOpenAI(r.model, r.inp, r.out)),
     0
   );
-  const totalReqs = rows.reduce((sum, r) => sum + r.reqs, 0);
-
   for (const r of rows) {
     // Use actual cost if available, otherwise calculate from tokens
     const cur = r.cost > 0 ? r.cost : tcOpenAI(r.model, r.inp, r.out);
 
-    console.log(
-      `[OpenAI Analysis] Row: model=${r.model}, cost=${cur.toFixed(4)}, inp=${r.inp}, out=${r.out}, reqs=${r.reqs}`
-    );
-
     if (cur === 0) {
-      console.log(`[OpenAI Analysis] Skipping (cost is zero)`);
       continue;
     }
 
@@ -244,9 +237,6 @@ export function findIssuesOpenAI(
     ) => {
       // Skip if this category was already added for this model
       if (addedCategories.has(category)) {
-        console.log(
-          `[OpenAI Analysis] Skipping duplicate category ${category} for ${r.model}`
-        );
         return;
       }
 
@@ -290,9 +280,6 @@ export function findIssuesOpenAI(
             meanDaily: r.activeDays > 0 ? r.reqs / r.activeDays : 0,
           },
         });
-        console.log(
-          `[OpenAI Analysis] Found category ${category}: sav=${$(sav)}, conf=${confidence.toFixed(2)}`
-        );
       }
     };
 
@@ -751,8 +738,6 @@ export function findIssuesOpenAI(
       },
     });
   }
-
-  console.log(`[OpenAI Analysis] Generated ${out.length} findings`);
 
   return out.sort((a, b) => {
     const sv: Record<Severity, number> = {

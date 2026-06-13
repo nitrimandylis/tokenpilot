@@ -190,17 +190,12 @@ export const storage = {
     const history = getHistory();
     const analysis = history[id];
     if (!analysis) {
-      console.log(`[Storage] No analysis found for id: ${id}`);
       return;
     }
 
     const monthKey = `${year}-${String(month).padStart(2, "0")}`;
-    console.log(
-      `[Storage] Deleting month data: ${monthKey} from analysis ${id}`
-    );
     delete analysis.months[monthKey];
     saveHistory(history);
-    console.log(`[Storage] Month data cleared successfully`);
   },
 
   /**

@@ -560,7 +560,6 @@ function RecommendationsPageContent() {
     );
   }
 
-  const mxW = r ? Math.max(...r.wss.map((w) => w.spend), 1) : 1;
   const wColors = [
     "bg-blue-500",
     "bg-violet-500",

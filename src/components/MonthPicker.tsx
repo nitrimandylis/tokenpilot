@@ -38,11 +38,6 @@ export default function MonthPicker({
   // Generate year range (5 years back, current year, and future years up to current)
   const startYear = currentYearNow - 5;
   const endYear = currentYearNow;
-  const years = Array.from(
-    { length: endYear - startYear + 1 },
-    (_, i) => startYear + i
-  ).reverse();
-
   const isMonthDisabled = (year: number, month: number) => {
     // Disable future months
     if (year > currentYearNow) return true;

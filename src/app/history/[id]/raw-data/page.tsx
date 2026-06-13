@@ -8,17 +8,15 @@ import VendorBadge from "@/components/VendorBadge";
 import { storage, Vendor } from "@/lib/storage";
 import Stat from "@/components/Stat";
 import { $, T, P } from "@/lib/formatters";
-import { useApiKey } from "@/contexts/ApiKeyContext";
 
 function RawDataPageContent() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { getKey } = useApiKey();
   const id = params.id as string;
 
   const [rawOpen, setRawOpen] = useState<string | null>(null);
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isRefreshing, _setIsRefreshing] = useState(false);
 
   // Load analysis from storage
   const analysisRecord = storage.getAnalysis(id);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams, useParams } from "next/navigation";
-import { storage, Vendor } from "@/lib/storage";
+import { storage } from "@/lib/storage";
 import { useEffect, useState, Suspense } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";

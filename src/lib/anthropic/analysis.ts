@@ -215,9 +215,6 @@ export function findIssues(
     ) => {
       // Skip if this category was already added for this API key
       if (addedCategoriesByKey[keyId].has(category)) {
-        console.log(
-          `[Anthropic Analysis] Skipping duplicate category ${category} for ${keyId}`
-        );
         return;
       }
 
