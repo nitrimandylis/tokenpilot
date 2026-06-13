@@ -3,12 +3,22 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { motion } from "motion/react";
 import { storage } from "@/lib/storage";
 import type { AnalysisRecord } from "@/lib/storage";
 import { $ } from "@/lib/formatters";
 import Header from "@/components/Header";
 import VendorBadge from "@/components/VendorBadge";
 import Footer from "@/components/Footer";
+
+function relativeTime(iso: string): string {
+  const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
 
 const monthNames = [
   "January",
@@ -34,6 +44,17 @@ export default function HistoryPage() {
     setMounted(true);
     setAnalyses(storage.getAllAnalyses());
   }, []);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        router.push("/");
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [router]);
 
   const handleDelete = (id: string, e: React.MouseEvent) => {
     e.preventDefault();
@@ -89,8 +110,18 @@ export default function HistoryPage() {
         </div>
 
         {analyses.length === 0 ? (
-          <div className="flex flex-col items-center text-center pt-12">
-            <div className="w-16 h-16 rounded-sm bg-ink-elevated border border-ink-border flex items-center justify-center mb-4">
+          <motion.div
+            className="flex flex-col items-center text-center pt-12"
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, ease: "easeOut" }}
+          >
+            <motion.div
+              className="w-16 h-16 rounded-sm bg-ink-elevated border border-ink-border flex items-center justify-center mb-4"
+              initial={{ scale: 0.85 }}
+              animate={{ scale: 1 }}
+              transition={{ duration: 0.35, ease: "easeOut" }}
+            >
               <svg
                 className="w-8 h-8 text-bone-subtle"
                 fill="none"
@@ -104,7 +135,7 @@ export default function HistoryPage() {
                   d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
                 />
               </svg>
-            </div>
+            </motion.div>
             <h2
               className="text-lg font-semibold text-bone font-display"
               style={{ letterSpacing: "-0.02em" }}
@@ -121,7 +152,10 @@ export default function HistoryPage() {
             >
               Get started →
             </Link>
-          </div>
+            <p className="mt-4 text-xs text-bone-subtle font-mono">
+              Tip: Press ⌘K anywhere to start a new analysis
+            </p>
+          </motion.div>
         ) : (
           <div className="space-y-2">
             {analyses.map((analysis, idx) => {
@@ -187,6 +221,18 @@ export default function HistoryPage() {
                           <span>
                             {latestMonth.report.findings.length} findings
                           </span>
+                          {latestMonth.timestamp && (
+                            <>
+                              <span>·</span>
+                              <span
+                                title={new Date(
+                                  latestMonth.timestamp
+                                ).toLocaleString()}
+                              >
+                                analyzed {relativeTime(latestMonth.timestamp)}
+                              </span>
+                            </>
+                          )}
                         </div>
                       </div>
 

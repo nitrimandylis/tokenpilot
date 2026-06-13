@@ -12,6 +12,7 @@ import { agg, findIssues } from "@/lib/anthropic/analysis";
 import { aggOpenAI, findIssuesOpenAI } from "@/lib/openai/analysis";
 import { tc } from "@/lib/anthropic/pricing";
 import { tcOpenAI } from "@/lib/openai/pricing";
+import { demoAnthropic, demoOpenAI } from "@/lib/demo";
 import type { Report } from "@/types";
 import Footer from "@/components/Footer";
 import { FadeUp } from "@/components/motion/FadeUp";
@@ -309,6 +310,181 @@ function HomeContent() {
     }
   };
 
+  const startDemo = async () => {
+    setErr("");
+    setIsAnalyzing(true);
+    setStep("Generating sample data...");
+
+    try {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.getMonth();
+      const id = generateId();
+
+      if (vendor === Vendor.OPENAI) {
+        setStep("Simulating OpenAI usage...");
+        const d = demoOpenAI(year, month);
+
+        const rows = aggOpenAI(d.usage);
+        const findings = findIssuesOpenAI(rows, d.projects);
+
+        let spend = 0;
+        if (d.costs && d.costs.data.length > 0) {
+          for (const bucket of d.costs.data) {
+            for (const result of bucket.results) {
+              spend += result.amount.value;
+            }
+          }
+        } else {
+          for (const row of rows) {
+            spend += tcOpenAI(row.model, row.inp, row.out);
+          }
+        }
+
+        let ti = 0,
+          to = 0;
+        for (const row of rows) {
+          ti += row.inp;
+          to += row.out;
+        }
+
+        const projectSpend: Record<string, { id: string; spend: number }> = {};
+        const projectNames: Record<string, string> = {};
+        (d.projects || []).forEach((p) => {
+          projectSpend[p.id] = { id: p.id, spend: 0 };
+          projectNames[p.id] = p.name || p.id;
+        });
+        if (d.costs && d.costs.data.length > 0) {
+          for (const bucket of d.costs.data) {
+            for (const result of bucket.results) {
+              const pid = result.project_id || "default";
+              if (!projectSpend[pid]) {
+                projectSpend[pid] = { id: pid, spend: 0 };
+                projectNames[pid] = result.project_name || pid;
+              }
+              projectSpend[pid].spend += result.amount.value;
+            }
+          }
+        }
+        const wss = Object.values(projectSpend)
+          .map((p) => ({ ...p, name: projectNames[p.id] || p.id }))
+          .sort((a, b) => b.spend - a.spend)
+          .slice(0, 10);
+
+        const report: Report = {
+          org: d.org,
+          spend,
+          savings: findings.reduce((s, f) => s + f.sav, 0),
+          tokens: ti + to,
+          findings,
+          wss,
+          keys: rows.length,
+          wc: d.projects?.length || wss.length || 1,
+          critCount: findings.filter((f) => f.sev === Severity.CRITICAL).length,
+          warnCount: findings.filter((f) => f.sev === Severity.WARNING).length,
+          infoCount: findings.filter((f) => f.sev === Severity.INFO).length,
+          highConfSavings: findings
+            .filter((f) => f.conf >= 0.65)
+            .reduce((s, f) => s + f.sav, 0),
+        };
+
+        storage.saveAnalysis(
+          id,
+          Vendor.OPENAI,
+          year,
+          month,
+          d.org.name || "Organization",
+          d.org.id || "",
+          report,
+          { ...d.raw, usage: d.usage }
+        );
+
+        router.push(
+          `/history/${id}/recommendations?year=${year}&month=${month}`
+        );
+        return;
+      }
+
+      setStep("Simulating Anthropic usage...");
+      const d = demoAnthropic(year, month);
+
+      const bk = agg(d.bk);
+      const bm = agg(d.bm);
+      const src = bk.length ? bk : bm;
+      const findings = findIssues(
+        src,
+        d.ws,
+        d.rawBk.length ? d.rawBk : d.rawBm
+      );
+
+      let spend = 0,
+        ti = 0,
+        to = 0;
+      for (const a of bm.length ? bm : src) {
+        spend += tc(a.model, a.inp, a.out);
+        ti += a.inp;
+        to += a.out;
+      }
+
+      const wb = agg(d.bw);
+      const wa: Record<string, { id: string; spend: number }> = {};
+      const wn: Record<string, string> = {};
+      wa["default"] = { id: "default", spend: 0 };
+      wn["default"] = "default";
+      (d.ws || []).forEach((w) => {
+        wa[w.id] = { id: w.id, spend: 0 };
+        wn[w.id] = w.display_name || w.name || w.id;
+      });
+      for (const w of wb) {
+        const wid = w.wid || "default";
+        if (!wa[wid]) {
+          wa[wid] = { id: wid, spend: 0 };
+          wn[wid] = wid;
+        }
+        wa[wid].spend += tc(w.model, w.inp, w.out);
+      }
+      const wss = Object.values(wa)
+        .map((w) => ({ ...w, name: wn[w.id] || w.id }))
+        .sort((a, b) => b.spend - a.spend)
+        .slice(0, 10);
+
+      const report: Report = {
+        org: d.org,
+        spend,
+        savings: findings.reduce((s, f) => s + f.sav, 0),
+        tokens: ti + to,
+        findings,
+        wss,
+        keys: new Set(src.map((s) => s.kid).filter(Boolean)).size || src.length,
+        wc: d.ws?.length || wss.length || 1,
+        critCount: findings.filter((f) => f.sev === Severity.CRITICAL).length,
+        warnCount: findings.filter((f) => f.sev === Severity.WARNING).length,
+        infoCount: findings.filter((f) => f.sev === Severity.INFO).length,
+        highConfSavings: findings
+          .filter((f) => f.conf >= 0.65)
+          .reduce((s, f) => s + f.sav, 0),
+      };
+
+      storage.saveAnalysis(
+        id,
+        Vendor.ANTHROPIC,
+        year,
+        month,
+        d.org.name || "Organization",
+        d.org.id,
+        report,
+        d.raw
+      );
+
+      router.push(`/history/${id}/recommendations?year=${year}&month=${month}`);
+    } catch (x: unknown) {
+      const errorMsg =
+        x instanceof Error ? x.message : "Demo generation failed";
+      setErr(errorMsg);
+      setIsAnalyzing(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-ink text-bone font-sans flex flex-col">
       <Header currentPage="home" showNewReport={false} />
@@ -423,6 +599,21 @@ function HomeContent() {
                     : "Console → API Keys → Admin Keys → Create admin key (read-only)"}
                 </p>
 
+                {/* Demo mode */}
+                <div className="mt-4 flex items-center gap-3 w-full">
+                  <div className="flex-1 h-px bg-ink-border" />
+                  <span className="text-[11px] text-bone-subtle font-mono shrink-0">
+                    or
+                  </span>
+                  <div className="flex-1 h-px bg-ink-border" />
+                </div>
+                <button
+                  onClick={startDemo}
+                  className="mt-3 w-full rounded-sm border border-ink-border bg-ink-elevated px-4 py-2.5 text-sm text-bone-muted hover:text-bone hover:border-moss/40 transition-colors cursor-pointer font-sans"
+                >
+                  Try with sample data →
+                </button>
+
                 {/* Error display */}
                 {err && (
                   <div
@@ -472,16 +663,39 @@ function HomeContent() {
             </StaggerChildren>
           </div>
         ) : (
-          <div className="flex flex-col items-center pt-24">
-            <div className="w-8 h-8 border-2 border-moss/30 border-t-moss rounded-full animate-spin mb-6" />
-            <p className="text-sm text-bone font-medium">
-              {step || "Connecting..."}
-            </p>
-            <p className="text-xs text-bone-subtle mt-2 font-mono">
+          <div className="flex flex-col items-center pt-24 w-full max-w-2xl">
+            <div className="flex items-center gap-3 mb-8">
+              <div className="w-5 h-5 border-2 border-moss/30 border-t-moss rounded-full animate-spin shrink-0" />
+              <p className="text-sm text-bone font-medium">
+                {step || "Connecting..."}
+              </p>
+            </div>
+            <p className="text-xs text-bone-subtle mb-8 font-mono">
               {vendor === Vendor.OPENAI
                 ? "OpenAI Platform API · Read-only"
                 : "Anthropic Admin API · Read-only"}
             </p>
+            {/* Skeleton recommendation rows */}
+            <div className="w-full space-y-2">
+              {[1, 2, 3].map((i) => (
+                <div
+                  key={i}
+                  className="rounded-lg border border-ink-border bg-ink-elevated px-5 py-4 flex items-center gap-4"
+                  style={{ opacity: 1 - i * 0.2 }}
+                >
+                  <div className="w-5 h-3 bg-ink-border rounded animate-pulse shrink-0" />
+                  <div className="w-14 h-5 bg-ink-border rounded animate-pulse shrink-0" />
+                  <div className="flex-1 space-y-1.5">
+                    <div
+                      className="h-4 bg-ink-border rounded animate-pulse"
+                      style={{ width: `${60 + i * 12}%` }}
+                    />
+                    <div className="h-3 bg-ink-border rounded animate-pulse w-1/2" />
+                  </div>
+                  <div className="w-16 h-6 bg-ink-border rounded animate-pulse shrink-0" />
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </main>

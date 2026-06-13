@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { Finding } from "@/types";
 import { AnthropicCategory, OpenAICategory, Severity } from "@/types/analysis";
 import { Vendor } from "@/lib/storage";
@@ -19,6 +20,15 @@ interface RowProps {
 function Row({ f, open, toggle, vendor, index }: RowProps) {
   const isAnthropic = vendor === Vendor.ANTHROPIC;
   const isOpenAI = vendor === Vendor.OPENAI;
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(
+      `${f.name}: save ${$(f.sav)}/mo — ${f.reason}`
+    );
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   return (
     <div
@@ -232,8 +242,8 @@ client.messages.create(
                         ✓ Switch to Sonnet Model
                       </h4>
                       <p className="text-xs text-bone-muted mb-3">
-                        You're using {f.ml} when Sonnet would work fine for this
-                        task — save 80% with minimal quality difference.
+                        You&apos;re using {f.ml} when Sonnet would work fine for
+                        this task — save 80% with minimal quality difference.
                       </p>
                       <p className="text-[11px] text-bone-subtle mb-2">
                         Before: Using Opus ($15/$75 per 1M tokens)
@@ -266,8 +276,8 @@ client.messages.create(
                     </h4>
                     <p className="text-xs text-bone-muted mb-3">
                       {(f.cr * 100).toFixed(0)}% cache rate on{" "}
-                      {(f.inp / 1e6).toFixed(1)}M tokens — you're paying full
-                      price for repeated content.
+                      {(f.inp / 1e6).toFixed(1)}M tokens — you&apos;re paying
+                      full price for repeated content.
                     </p>
                     <p className="text-[11px] text-bone-subtle mb-2">
                       Before: No caching (full price on repeated content)
@@ -422,7 +432,7 @@ response = openai.chat.completions.create(
                     </h4>
                     <p className="text-xs text-bone-muted mb-3">
                       Input:output ratio of {f.ratio.toFixed(0)}:1 suggests
-                      you're passing too many document chunks per request.
+                      you&apos;re passing too many document chunks per request.
                     </p>
                     <p className="text-[11px] text-bone-subtle mb-2">
                       Before: Passing many chunks
@@ -674,13 +684,52 @@ for req in sample_requests:
                         {Math.round(f.conf * 100)}%
                       </p>
                     </div>
-                    <div className="text-right">
-                      <p className="text-xs text-bone-subtle mb-1">
-                        Expected savings
-                      </p>
-                      <p className="text-lg font-mono font-bold text-moss-light">
-                        ${f.sav.toFixed(2)}/mo
-                      </p>
+                    <div className="flex items-end gap-3">
+                      <div className="text-right">
+                        <p className="text-xs text-bone-subtle mb-1">
+                          Expected savings
+                        </p>
+                        <p className="text-lg font-mono font-bold text-moss-light">
+                          ${f.sav.toFixed(2)}/mo
+                        </p>
+                      </div>
+                      {f.sav > 0 && (
+                        <button
+                          onClick={handleCopy}
+                          title="Copy savings to clipboard"
+                          className="mb-0.5 p-1.5 rounded hover:bg-ink-elevated transition-colors text-bone-subtle hover:text-bone cursor-pointer"
+                        >
+                          {copied ? (
+                            <svg
+                              className="w-4 h-4 text-moss-light"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                              strokeWidth={2}
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="M5 13l4 4L19 7"
+                              />
+                            </svg>
+                          ) : (
+                            <svg
+                              className="w-4 h-4"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                              strokeWidth={2}
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                              />
+                            </svg>
+                          )}
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>

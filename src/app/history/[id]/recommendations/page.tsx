@@ -39,10 +39,12 @@ function RecommendationsPageContent() {
 
   const [filter, setFilter] = useState<FilterType>("all");
   const [oid, setOid] = useState<string | null>(null);
+  const [expandAll, setExpandAll] = useState(false);
   const [isFetching, setIsFetching] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [forceRefresh, setForceRefresh] = useState(false);
   const [showMonthPicker, setShowMonthPicker] = useState(false);
+  const [showExport, setShowExport] = useState(false);
   const [analysisRecord, setAnalysisRecord] = useState(() =>
     storage.getAnalysis(id)
   );
@@ -400,39 +402,112 @@ function RecommendationsPageContent() {
     router,
   ]);
 
+  const exportCSV = (report: Report) => {
+    const headers = [
+      "Recommendation",
+      "Category",
+      "Severity",
+      "Model",
+      "Workspace",
+      "Spend/mo",
+      "Savings/mo",
+      "Confidence",
+      "Action",
+    ];
+    const rows = report.findings.map((f) => [
+      f.name,
+      f.cat,
+      f.sev,
+      f.ml,
+      f.ws,
+      `$${f.cur.toFixed(2)}`,
+      `$${f.sav.toFixed(2)}`,
+      `${Math.round(f.conf * 100)}%`,
+      f.action,
+    ]);
+    const csv = [headers, ...rows]
+      .map((row) =>
+        row
+          .map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`)
+          .join(",")
+      )
+      .join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `tokenpilot-${analysisRecord!.orgName}-${year}-${String(month + 1).padStart(2, "0")}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setShowExport(false);
+  };
+
+  const exportJSON = (report: Report) => {
+    const payload = {
+      org: analysisRecord!.orgName,
+      vendor: analysisRecord!.vendor,
+      period: `${year}-${String(month + 1).padStart(2, "0")}`,
+      generatedAt: new Date().toISOString(),
+      spend: report.spend,
+      savings: report.savings,
+      tokens: report.tokens,
+      findings: report.findings,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `tokenpilot-${analysisRecord!.orgName}-${year}-${String(month + 1).padStart(2, "0")}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setShowExport(false);
+  };
+
   if (!analysisRecord) {
     return null;
   }
 
   if (isFetching) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh]">
-        <div className="relative mb-8">
-          {/* Background illustration */}
-          <div className="absolute inset-0 flex items-center justify-center">
-            <svg
-              className="w-32 h-32 text-ink-border/40"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={1}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-              />
-            </svg>
-          </div>
-          {/* Spinner */}
-          <div className="relative w-16 h-16 border-4 border-moss/20 border-t-moss rounded-full animate-spin" />
+      <div className="space-y-8">
+        {/* Skeleton stats bar */}
+        <div className="h-8 w-48 bg-ink-elevated rounded-sm animate-pulse" />
+        <div className="flex flex-wrap gap-y-6 rounded-sm border border-ink-border bg-ink-elevated p-6">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="flex-1 min-w-[120px] space-y-2">
+              <div className="h-3 w-20 bg-ink-border rounded animate-pulse" />
+              <div className="h-6 w-16 bg-ink-border rounded animate-pulse" />
+            </div>
+          ))}
         </div>
-        <p className="text-base text-bone font-medium mb-2">
-          Analyzing {monthNames[month]} {year}
-        </p>
-        <p className="text-xs text-bone-subtle">
-          Fetching usage data and running optimization analysis...
-        </p>
+        {/* Spinner + status */}
+        <div className="flex items-center gap-3 py-2">
+          <div className="w-4 h-4 border-2 border-moss/30 border-t-moss rounded-full animate-spin shrink-0" />
+          <p className="text-sm text-bone-subtle">
+            Analyzing {monthNames[month]} {year}…
+          </p>
+        </div>
+        {/* Skeleton rows */}
+        <div className="space-y-2">
+          {[1, 2, 3, 4].map((i) => (
+            <div
+              key={i}
+              className="rounded-lg border border-ink-border bg-ink-elevated px-5 py-4 flex items-center gap-4"
+              style={{ opacity: 1 - i * 0.15 }}
+            >
+              <div className="w-5 h-3 bg-ink-border rounded animate-pulse shrink-0" />
+              <div className="w-16 h-5 bg-ink-border rounded animate-pulse shrink-0" />
+              <div className="flex-1 space-y-1.5">
+                <div className="h-4 bg-ink-border rounded animate-pulse w-3/4" />
+                <div className="h-3 bg-ink-border rounded animate-pulse w-1/2" />
+              </div>
+              <div className="w-20 h-4 bg-ink-border rounded animate-pulse hidden sm:block shrink-0" />
+              <div className="w-16 h-6 bg-ink-border rounded animate-pulse shrink-0" />
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
@@ -482,19 +557,123 @@ function RecommendationsPageContent() {
           <span className="text-sm text-bone font-medium">
             {analysisRecord.orgName}
           </span>
+          {r && r.savings > 0 && (
+            <span className="px-2 py-0.5 rounded-full bg-moss/10 border border-moss/20 text-xs font-mono font-medium text-moss-light">
+              Save {$(r.savings)}/mo
+            </span>
+          )}
         </div>
-        <button
-          onClick={() => setForceRefresh(true)}
-          disabled={isFetching}
-          className={`text-xs font-medium px-3 py-1.5 rounded-sm transition-colors ${
-            isFetching
-              ? "text-bone-subtle cursor-not-allowed"
-              : "text-moss hover:bg-ink-elevated cursor-pointer"
-          }`}
-          title="Refresh data from API"
-        >
-          {isFetching ? "Refreshing..." : "Refresh"}
-        </button>
+        <div className="flex items-center gap-2 no-print">
+          {/* Export dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setShowExport((v) => !v)}
+              disabled={!r}
+              className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-sm transition-colors text-bone-subtle hover:text-bone hover:bg-ink-elevated cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Export report"
+            >
+              Export
+              <svg
+                className={`w-3 h-3 transition-transform ${showExport ? "rotate-180" : ""}`}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M19 9l-7 7-7-7"
+                />
+              </svg>
+            </button>
+            {showExport && r && (
+              <>
+                <div
+                  className="fixed inset-0 z-10"
+                  onClick={() => setShowExport(false)}
+                />
+                <div className="absolute right-0 top-full mt-1 z-20 w-40 rounded-sm border border-ink-border bg-ink-elevated shadow-lg overflow-hidden">
+                  <button
+                    onClick={() => exportCSV(r)}
+                    className="w-full flex items-center gap-2.5 px-3 py-2.5 text-xs text-bone-muted hover:text-bone hover:bg-ink-hover transition-colors cursor-pointer text-left"
+                  >
+                    <svg
+                      className="w-3.5 h-3.5 shrink-0"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                      />
+                    </svg>
+                    Download CSV
+                  </button>
+                  <button
+                    onClick={() => exportJSON(r)}
+                    className="w-full flex items-center gap-2.5 px-3 py-2.5 text-xs text-bone-muted hover:text-bone hover:bg-ink-hover transition-colors cursor-pointer text-left"
+                  >
+                    <svg
+                      className="w-3.5 h-3.5 shrink-0"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"
+                      />
+                    </svg>
+                    Download JSON
+                  </button>
+                  <div className="h-px bg-ink-border mx-3" />
+                  <button
+                    onClick={() => {
+                      setExpandAll(true);
+                      setShowExport(false);
+                      setTimeout(() => window.print(), 100);
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2.5 text-xs text-bone-muted hover:text-bone hover:bg-ink-hover transition-colors cursor-pointer text-left"
+                  >
+                    <svg
+                      className="w-3.5 h-3.5 shrink-0"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"
+                      />
+                    </svg>
+                    Print / PDF
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+
+          <button
+            onClick={() => setForceRefresh(true)}
+            disabled={isFetching}
+            className={`text-xs font-medium px-3 py-1.5 rounded-sm transition-colors ${
+              isFetching
+                ? "text-bone-subtle cursor-not-allowed"
+                : "text-moss hover:bg-ink-elevated cursor-pointer"
+            }`}
+            title="Refresh data from API"
+          >
+            {isFetching ? "Refreshing..." : "Refresh"}
+          </button>
+        </div>
       </div>
 
       {/* Tab Switcher */}
@@ -697,25 +876,34 @@ function RecommendationsPageContent() {
                 {filteredRecommendations.length} shown · {$(r.savings)}/mo total
               </span>
             </h2>
-            <div className="flex gap-1">
-              {[
-                ["all", "All"],
-                ["critical", "Critical"],
-                ["warning", "Warning"],
-                ["info", "Info"],
-              ].map(([k, l]) => (
-                <button
-                  key={k}
-                  onClick={() => setFilter(k as FilterType)}
-                  className={`px-2.5 py-1 rounded-sm text-[10px] font-medium transition-colors cursor-pointer ${
-                    filter === k
-                      ? "bg-ink-elevated text-bone border border-ink-border"
-                      : "text-bone-subtle hover:text-bone"
-                  }`}
-                >
-                  {l}
-                </button>
-              ))}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setExpandAll((v) => !v)}
+                className="text-[10px] font-medium text-bone-subtle hover:text-bone transition-colors cursor-pointer no-print"
+              >
+                {expandAll ? "Collapse all" : "Expand all"}
+              </button>
+              <div className="w-px h-3 bg-ink-border" />
+              <div className="flex gap-1">
+                {[
+                  ["all", "All"],
+                  ["critical", "Critical"],
+                  ["warning", "Warning"],
+                  ["info", "Info"],
+                ].map(([k, l]) => (
+                  <button
+                    key={k}
+                    onClick={() => setFilter(k as FilterType)}
+                    className={`px-2.5 py-1 rounded-sm text-[10px] font-medium transition-colors cursor-pointer ${
+                      filter === k
+                        ? "bg-ink-elevated text-bone border border-ink-border"
+                        : "text-bone-subtle hover:text-bone"
+                    }`}
+                  >
+                    {l}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -861,8 +1049,11 @@ function RecommendationsPageContent() {
                         <Row
                           key={`${f.id}-${key}`}
                           f={f}
-                          open={oid === f.id}
-                          toggle={() => setOid(oid === f.id ? null : f.id)}
+                          open={expandAll || oid === f.id}
+                          toggle={() => {
+                            setExpandAll(false);
+                            setOid(oid === f.id ? null : f.id);
+                          }}
                           vendor={analysisRecord.vendor}
                           index={key + 1}
                         />

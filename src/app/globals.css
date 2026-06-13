@@ -117,3 +117,26 @@ body {
   scrollbar-width: thin;
   scrollbar-color: #2a2220 #1a1614;
 }
+
+/* Print styles for report export */
+@media print {
+  header,
+  footer,
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background: white !important;
+    color: black !important;
+  }
+
+  .print-expand {
+    display: block !important;
+  }
+
+  /* Show all row expanded content when printing */
+  [data-row-detail] {
+    display: block !important;
+  }
+}
