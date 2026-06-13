@@ -3,11 +3,16 @@
 import type { PricingInfo } from "@/types";
 import { AnthropicModelTier } from "@/types";
 
+/** ISO date when pricing was last verified against Anthropic's pricing page. */
+export const PRICING_TABLE_DATE = "2026-06-14";
+
 /**
  * Model pricing map (MP)
  * Maps model identifiers to their pricing information
  */
 export const MP: Record<string, PricingInfo> = {
+  // Claude 4 family (gen 4)
+  "opus-4-8": { i: 5, o: 25, l: "Opus 4.8", t: AnthropicModelTier.OPUS, g: 4 },
   "opus-4-6": { i: 5, o: 25, l: "Opus 4.6", t: AnthropicModelTier.OPUS, g: 4 },
   "opus-4-5": { i: 15, o: 75, l: "Opus 4.5", t: AnthropicModelTier.OPUS, g: 3 },
   "opus-4-1": { i: 15, o: 75, l: "Opus 4.1", t: AnthropicModelTier.OPUS, g: 3 },

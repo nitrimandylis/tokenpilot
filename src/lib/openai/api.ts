@@ -185,7 +185,7 @@ export async function pull(
 
   // OpenAI doesn't provide a /v1/organization endpoint
   // We'll extract org info from other responses
-  let org: any = { id: "", name: "Organization" };
+  const org: any = { id: "", name: "Organization" };
 
   log("Fetching usage data...");
 
@@ -222,11 +222,11 @@ export async function pull(
     }, // No model grouping
   ];
 
-  let allUsageData: any[] = [];
+  const allUsageData: any[] = [];
 
   for (const { endpoint, group_by } of usageEndpoints) {
     try {
-      let allPages: any[] = [];
+      const allPages: any[] = [];
       let nextPage: string | undefined = undefined;
       let pageCount = 0;
 

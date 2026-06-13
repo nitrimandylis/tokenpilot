@@ -1,6 +1,6 @@
 # TokenPilot — Roadmap / TODO
 
-_Last updated: 2026-06-13_
+_Last updated: 2026-06-14_
 
 ## 1. Done
 
@@ -28,20 +28,19 @@ _Last updated: 2026-06-13_
 
 - [ ] shadcn/ui rework — old "industrial theme" attempt deleted; tip was
       `48e239c` (reflog-recoverable short-term only).
-- [ ] Export/share: reports live only in localStorage — add PDF/CSV export or
-      shareable read-only snapshot.
-- [ ] New analysis rules + pricing freshness: pricing tables date fast (current
-      table tops out at Opus 4.6/Sonnet 4.6). Add stale-pricing guard, new
-      model entries, cache-write vs cache-read economics rule, OpenAI batch
-      savings rule.
-- [ ] Multi-month trends in recommendations: engine sees one month at a time;
-      add MoM deltas ("spend up 40% MoM") to strengthen findings.
+- [x] Export/share: CSV + JSON blob downloads via native Blob API; Print/PDF via
+      `window.print()` with `@media print` CSS; dropdown in recommendations header.
+- [x] New analysis rules + pricing freshness: `PRICING_TABLE_DATE` constant with >90-day stale banner; added Opus 4.8 entry; cache-write economics rule
+      (Rule 5b) fires when `cacheCreated > 2M && cached/cacheCreated < 1.0`;
+      OpenAI high-volume batch rule (Rule 4b) fires when `reqs > 1000 && cur > 30`.
+- [x] Multi-month trends: MoM spend delta computed from previous month localStorage
+      data; shown as colored ↑/↓ % in savings title band and Monthly Spend stat.
 
 ## 3. Hygiene
 
-- [ ] Optional: enforce conventional commits via commitlint.
+- [x] Enforce conventional commits via commitlint (`@commitlint/config-conventional`,
+      husky `commit-msg` hook).
 
 ---
 
-Suggested next: shadcn/ui rework for visual polish, then export/share for
-user value.
+Suggested next: shadcn/ui rework for visual polish.

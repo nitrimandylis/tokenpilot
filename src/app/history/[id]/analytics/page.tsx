@@ -19,6 +19,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
+import { tcOpenAI } from "@/lib/openai/pricing";
 
 export default function AnalyticsPage() {
   const params = useParams();
@@ -358,7 +359,7 @@ export default function AnalyticsPage() {
             },
           ];
 
-          let allUsageData: any[] = [];
+          const allUsageData: any[] = [];
           const raw: any = {};
 
           // Fetch all usage data for the year with pagination
@@ -428,7 +429,7 @@ export default function AnalyticsPage() {
 
           // Fetch projects
           let projects: any[] = [];
-          let org: any = { id: "", name: "Organization" };
+          const org: any = { id: "", name: "Organization" };
           try {
             const r = await call(apiKey, "/v1/organization/projects", {
               limit: 100,
@@ -616,9 +617,6 @@ export default function AnalyticsPage() {
       ) {
         const rawUsage = (monthData.rawData as any).usage;
         const usageData = rawUsage.data || [];
-
-        // Import OpenAI pricing function
-        const { tcOpenAI } = require("@/lib/openai/pricing");
 
         for (const record of usageData) {
           const service = record.service || "completions";

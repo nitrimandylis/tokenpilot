@@ -3,6 +3,9 @@
 import type { PricingInfo } from "@/types";
 import { OpenAIModelTier } from "@/types";
 
+/** ISO date when pricing was last verified against OpenAI's pricing page. */
+export const PRICING_TABLE_DATE = "2026-06-14";
+
 /**
  * OpenAI Model pricing map
  * Prices per million tokens ($/MTok)

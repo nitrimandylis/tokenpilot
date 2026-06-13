@@ -492,6 +492,39 @@ export function findIssuesOpenAI(
       }
     }
 
+    /* ─── RULE 4b: High-Volume Batch Candidate (steady traffic) ─── */
+    // Rule 4 only catches bursty traffic. This catches steady high-volume workloads
+    // where Batch API still saves 50% if the caller can tolerate 24hr latency.
+    if (
+      !isNonCompletionsService &&
+      r.reqs > 1000 &&
+      cur > 30 &&
+      r.activeDays >= 20
+    ) {
+      const avgDaily = r.reqs / r.activeDays;
+      const signals = [
+        { weight: 0.4, met: cur > 80 },
+        { weight: 0.3, met: r.reqs > 5000 },
+        { weight: 0.2, met: !isGPT4OMini },
+        { weight: 0.1, met: avgDaily < 2000 },
+      ];
+      const conf = confidenceScore(signals);
+      if (conf >= 0.4) {
+        const opt = cur * 0.5;
+        const reason = `${r.reqs.toLocaleString()} requests/mo (~${Math.round(avgDaily)}/day, ${r.activeDays} active days). Steady high-volume pattern — Batch API gives 50% off for async workloads with 24hr turnaround.`;
+        const action = `If any of these calls are latency-tolerant (evals, data processing, nightly jobs), migrate to Batch API. Zero code change required beyond switching endpoint to /v1/batches.`;
+        const sev = conf >= 0.65 ? Severity.WARNING : Severity.INFO;
+        addFinding(
+          OpenAICategory.BATCH_API_MIGRATION,
+          opt,
+          reason,
+          action,
+          sev,
+          conf
+        );
+      }
+    }
+
     /* ─── RULE 5: O1/O3 Overkill Detection ─── */
     // O-series models are expensive reasoning models - detect if they're being overused
     if (

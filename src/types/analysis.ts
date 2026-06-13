@@ -75,7 +75,8 @@ export interface AggregatedRow {
   wid?: string; // workspace_id
   inp: number; // input tokens
   out: number; // output tokens
-  cached: number;
+  cached: number; // cache read tokens
+  cacheCreated: number; // cache write tokens
   reqs: number;
   activeDays: number;
 }

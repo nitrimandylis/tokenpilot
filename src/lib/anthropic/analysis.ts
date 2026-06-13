@@ -38,6 +38,7 @@ export function agg(buckets: UsageBucket[]): AggregatedRow[] {
         inp: 0,
         out: 0,
         cached: 0,
+        cacheCreated: 0,
         reqs: 0,
         days: new Set(),
         activeDays: 0,
@@ -51,6 +52,7 @@ export function agg(buckets: UsageBucket[]): AggregatedRow[] {
     m[k].out += b.output_tokens || 0;
     m[k].cached +=
       (b.cache_read_input_tokens || 0) + (b.input_tokens_cached || 0);
+    m[k].cacheCreated += b.cache_creation_input_tokens || 0;
     m[k].reqs += b.request_count || 0;
 
     if (b.bucket_start) {
@@ -386,6 +388,31 @@ export function findIssues(
           reason,
           action,
           sev,
+          conf
+        );
+      }
+    }
+
+    /* ─── RULE 5b: Cache Write Efficiency ─── */
+    // Cache writes cost 25% MORE than regular input; reads cost 90% LESS.
+    // Break-even: each written token only needs 0.28 reads to pay for itself.
+    // Fire when writes are large but reads are sparse → cache invalidating before reuse.
+    if (r.cacheCreated > 2e6 && r.cached / r.cacheCreated < 1.0) {
+      const reuseFactor = r.cacheCreated > 0 ? r.cached / r.cacheCreated : 0;
+      const writeExtra = (r.cacheCreated / 1e6) * p.i * 0.25;
+      const readSaving = (r.cached / 1e6) * p.i * 0.9;
+      const netCacheCost = writeExtra - readSaving;
+      if (netCacheCost > 1) {
+        const conf = Math.min(0.9, 0.5 + (1.0 - reuseFactor) * 0.5);
+        const opt = cur - netCacheCost * 0.6;
+        const reason = `Wrote ${(r.cacheCreated / 1e6).toFixed(1)}M cache tokens but only read back ${(r.cached / 1e6).toFixed(1)}M (${(reuseFactor * 100).toFixed(0)}% reuse). Cache paying ${$(netCacheCost)}/mo more than it saves — invalidating before adequate reuse.`;
+        const action = `Extend cache TTL (up to 5 min default, up to 60 min with extended cache). Ensure system prompt structure is stable between requests. Avoid inserting dynamic content before the cache breakpoint.`;
+        addFinding(
+          AnthropicCategory.PROMPT_CACHING,
+          opt,
+          reason,
+          action,
+          Severity.WARNING,
           conf
         );
       }

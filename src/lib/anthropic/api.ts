@@ -123,7 +123,7 @@ export async function fetchAllPages(
   endpoint: string,
   params: Record<string, any>
 ): Promise<UsageBucket[]> {
-  let allResults: UsageBucket[] = [];
+  const allResults: UsageBucket[] = [];
   let nextPage: string | null = null;
   let pageCount = 0;
   const maxPages = 100; // Safety limit

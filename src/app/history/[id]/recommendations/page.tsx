@@ -10,8 +10,11 @@ import MonthPicker from "@/components/MonthPicker";
 import { CountUp } from "@/components/motion/CountUp";
 import { $, T, P } from "@/lib/formatters";
 import { storage, Vendor } from "@/lib/storage";
+import type { MonthData } from "@/lib/storage";
 import type { Report } from "@/types";
 import { useApiKey } from "@/contexts/ApiKeyContext";
+import { PRICING_TABLE_DATE as ANTHROPIC_PRICING_DATE } from "@/lib/anthropic/pricing";
+import { PRICING_TABLE_DATE as OPENAI_PRICING_DATE } from "@/lib/openai/pricing";
 
 type FilterType = "all" | "critical" | "warning" | "info";
 
@@ -76,6 +79,27 @@ function RecommendationsPageContent() {
     : null;
 
   const r = monthData?.report;
+
+  // Previous month for MoM comparison
+  const prevMonth = month === 0 ? 11 : month - 1;
+  const prevYear = month === 0 ? year - 1 : year;
+  const prevMonthData: MonthData | null = analysisRecord
+    ? storage.getMonthData(id, prevYear, prevMonth)
+    : null;
+  const momSpendDelta =
+    prevMonthData && r && prevMonthData.report.spend > 0
+      ? (r.spend - prevMonthData.report.spend) / prevMonthData.report.spend
+      : null;
+
+  // Stale-pricing guard: warn if pricing table > 90 days old
+  const pricingDate =
+    analysisRecord?.vendor === Vendor.ANTHROPIC
+      ? ANTHROPIC_PRICING_DATE
+      : OPENAI_PRICING_DATE;
+  const pricingAgeDays = Math.floor(
+    (Date.now() - new Date(pricingDate).getTime()) / 86_400_000
+  );
+  const pricingStale = pricingAgeDays > 90;
 
   // Filtered recommendations - must be called before any returns
   const filteredRecommendations = useMemo(() => {
@@ -698,6 +722,33 @@ function RecommendationsPageContent() {
         </Link>
       </div>
 
+      {/* Stale-pricing warning */}
+      {pricingStale && (
+        <div className="flex items-start gap-3 rounded-sm border border-warning/30 bg-warning/5 px-4 py-3 no-print">
+          <svg
+            className="w-4 h-4 text-warning shrink-0 mt-0.5"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+            />
+          </svg>
+          <p className="text-xs text-warning/90">
+            Pricing table last verified {pricingAgeDays} days ago — savings
+            estimates may be off. Check{" "}
+            {analysisRecord.vendor === Vendor.ANTHROPIC
+              ? "anthropic.com/pricing"
+              : "openai.com/api/pricing"}{" "}
+            for current rates.
+          </p>
+        </div>
+      )}
+
       {/* Month Navigation */}
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-bone-subtle">
@@ -836,6 +887,36 @@ function RecommendationsPageContent() {
         {r.savings > 0 && (
           <p className="text-xs text-bone-subtle mt-1">
             {P(r.savings, r.spend)}% of current {$(r.spend)}/mo spend
+            {momSpendDelta !== null && (
+              <span
+                className={`ml-3 font-mono font-medium ${
+                  momSpendDelta > 0.05
+                    ? "text-critical"
+                    : momSpendDelta < -0.05
+                      ? "text-moss-light"
+                      : "text-bone-subtle"
+                }`}
+              >
+                {momSpendDelta > 0 ? "↑" : "↓"}{" "}
+                {Math.abs(momSpendDelta * 100).toFixed(0)}% vs last mo
+              </span>
+            )}
+          </p>
+        )}
+        {momSpendDelta !== null && r.savings === 0 && (
+          <p className="text-xs text-bone-subtle mt-1">
+            <span
+              className={`font-mono font-medium ${
+                momSpendDelta > 0.05
+                  ? "text-critical"
+                  : momSpendDelta < -0.05
+                    ? "text-moss-light"
+                    : "text-bone-subtle"
+              }`}
+            >
+              {momSpendDelta > 0 ? "↑" : "↓"}{" "}
+              {Math.abs(momSpendDelta * 100).toFixed(0)}% vs last mo
+            </span>
           </p>
         )}
       </div>
@@ -846,9 +927,11 @@ function RecommendationsPageContent() {
           label="Monthly Spend"
           value={$(r.spend)}
           sub={
-            analysisRecord.vendor === Vendor.ANTHROPIC
-              ? `${r.keys} keys · ${r.wc} workspaces`
-              : `${r.wc} projects`
+            momSpendDelta !== null
+              ? `${momSpendDelta > 0 ? "↑" : "↓"}${Math.abs(momSpendDelta * 100).toFixed(0)}% vs last mo`
+              : analysisRecord.vendor === Vendor.ANTHROPIC
+                ? `${r.keys} keys · ${r.wc} workspaces`
+                : `${r.wc} projects`
           }
         />
         <Stat

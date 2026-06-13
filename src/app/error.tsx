@@ -49,7 +49,7 @@ export default function Error({
         </h1>
         <p className="text-slate-400 text-base mb-2 max-w-md mx-auto">
           An unexpected error occurred while processing your request. This has
-          been logged and we'll look into it.
+          been logged and we&apos;ll look into it.
         </p>
 
         {/* Error Details (for development) */}
@@ -128,7 +128,7 @@ export default function Error({
                 Check Your Connection
               </h3>
               <p className="text-xs text-slate-500">
-                Make sure you're connected to the internet
+                Make sure you&apos;re connected to the internet
               </p>
             </div>
             <div className="rounded-lg border border-slate-800 bg-slate-900/40 p-4">
