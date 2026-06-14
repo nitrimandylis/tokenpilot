@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, Suspense } from "react";
+import { useState, useRef, useEffect, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { storage, generateId, Vendor } from "@/lib/storage";
 import { Severity } from "@/types";
@@ -20,6 +20,70 @@ import { StaggerChildren } from "@/components/motion/StaggerChildren";
 import { MagneticButton } from "@/components/motion/MagneticButton";
 import { Marquee } from "@/components/Marquee";
 
+const LITELLM_URL =
+  "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json";
+
+const DEFAULT_TICKER = [
+  "Claude Opus 4.7 · $15/MTok input",
+  "Claude Sonnet 4.6 · $3/MTok input",
+  "Claude Haiku 4.5 · $0.80/MTok input",
+  "GPT-4o · $2.50/MTok input",
+  "GPT-4o mini · $0.15/MTok input",
+  "o3 · $10/MTok input",
+  "Batch API · 50% discount",
+  "Prompt caching · 90% discount on cache reads",
+];
+
+function formatModelId(id: string, provider: "anthropic" | "openai"): string {
+  const clean = id.replace(/-\d{8}$/, "");
+  if (provider === "openai") {
+    if (clean.startsWith("gpt-")) return "GPT-" + clean.slice(4);
+    return clean; // o1, o3, o4-mini etc
+  }
+  // Anthropic: split on hyphens, merge consecutive digit tokens with "."
+  const parts = clean
+    .split("-")
+    .map((w) => (/^\d+$/.test(w) ? w : w.charAt(0).toUpperCase() + w.slice(1)));
+  const out: string[] = [];
+  for (const p of parts) {
+    if (
+      out.length &&
+      /^\d+$/.test(p) &&
+      /^\d+(\.\d+)?$/.test(out[out.length - 1])
+    ) {
+      out[out.length - 1] += "." + p;
+    } else {
+      out.push(p);
+    }
+  }
+  return out.join(" ");
+}
+
+function fmtTickerPrice(n: number): string {
+  if (n >= 10) return `$${Math.round(n)}`;
+  if (n >= 1) return `$${n % 1 === 0 ? n.toFixed(0) : n.toFixed(2)}`;
+  return `$${n.toFixed(2)}`;
+}
+
+function modelDate(id: string): number {
+  // -20241022 suffix
+  const m1 = id.match(/-(\d{8})$/);
+  if (m1) return parseInt(m1[1]);
+  // -2024-11-20 suffix
+  const m2 = id.match(/-(\d{4})-(\d{2})-(\d{2})$/);
+  if (m2) return parseInt(m2[1] + m2[2] + m2[3]);
+  // No date = canonical current version, sort high
+  return 99999999;
+}
+
+function isLegacy(id: string): boolean {
+  return (
+    /^gpt-3/.test(id) ||
+    /^gpt-4(?!o)/.test(id) || // gpt-4, gpt-4-turbo — but NOT gpt-4o
+    /^(davinci|babbage|ada|curie|text-|code-)/.test(id)
+  );
+}
+
 function HomeContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -36,6 +100,57 @@ function HomeContent() {
   const [err, setErr] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [step, setStep] = useState("");
+  const [tickerItems, setTickerItems] = useState(DEFAULT_TICKER);
+
+  const buildTicker = useCallback(
+    (
+      data: Record<
+        string,
+        {
+          input_cost_per_token?: number;
+          output_cost_per_token?: number;
+          litellm_provider?: string;
+        }
+      >
+    ) => {
+      const ant: { id: string; input: number }[] = [];
+      const oai: { id: string; input: number }[] = [];
+      for (const [id, m] of Object.entries(data)) {
+        if (id.includes("/")) continue;
+        const inp = (m.input_cost_per_token ?? 0) * 1_000_000;
+        if (inp === 0) continue;
+        if (m.litellm_provider === "anthropic") ant.push({ id, input: inp });
+        else if (m.litellm_provider === "openai") oai.push({ id, input: inp });
+      }
+      const top = (arr: typeof ant, n: number) =>
+        arr
+          .filter((m) => !isLegacy(m.id))
+          .sort((a, b) => {
+            const dd = modelDate(b.id) - modelDate(a.id);
+            if (dd !== 0) return dd;
+            return b.input - a.input; // tiebreak: higher cost = frontier model
+          })
+          .slice(0, n);
+      const fmt = (
+        m: { id: string; input: number },
+        p: "anthropic" | "openai"
+      ) => `${formatModelId(m.id, p)} · ${fmtTickerPrice(m.input)}/MTok input`;
+      setTickerItems([
+        ...top(ant, 4).map((m) => fmt(m, "anthropic")),
+        ...top(oai, 4).map((m) => fmt(m, "openai")),
+        "Batch API · 50% discount",
+        "Prompt caching · 90% discount on cache reads",
+      ]);
+    },
+    []
+  );
+
+  useEffect(() => {
+    fetch(LITELLM_URL)
+      .then((r) => r.json())
+      .then(buildTicker)
+      .catch(() => {});
+  }, [buildTicker]);
 
   // Focus input when vendor changes
   useEffect(() => {
@@ -531,16 +646,7 @@ function HomeContent() {
             {/* Marquee ticker */}
             <div className="w-full overflow-hidden border-y border-ink-border my-8 py-3">
               <Marquee className="text-xs font-mono text-bone-subtle">
-                {[
-                  "Claude Opus 4.7 · $15/MTok input",
-                  "Claude Sonnet 4.6 · $3/MTok input",
-                  "Claude Haiku 4.5 · $0.80/MTok input",
-                  "GPT-4o · $2.50/MTok input",
-                  "GPT-4o mini · $0.15/MTok input",
-                  "o3 · $10/MTok input",
-                  "Batch API · 50% discount",
-                  "Prompt caching · 90% discount on cache reads",
-                ].map((item, i) => (
+                {tickerItems.map((item, i) => (
                   <span key={i} className="mx-8">
                     {item} ·
                   </span>
