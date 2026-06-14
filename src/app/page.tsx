@@ -322,52 +322,147 @@ function HomeContent() {
       const id = generateId();
 
       if (vendor === Vendor.OPENAI) {
-        setStep("Simulating OpenAI usage...");
-        const d = demoOpenAI(year, month);
-
-        const rows = aggOpenAI(d.usage);
-        const findings = findIssuesOpenAI(rows, d.projects);
-
-        let spend = 0;
-        if (d.costs && d.costs.data.length > 0) {
-          for (const bucket of d.costs.data) {
-            for (const result of bucket.results) {
-              spend += result.amount.value;
-            }
+        setStep("Simulating 6 months of OpenAI usage...");
+        for (let i = 5; i >= 0; i--) {
+          let m = month - i;
+          let y = year;
+          while (m < 0) {
+            m += 12;
+            y--;
           }
-        } else {
-          for (const row of rows) {
-            spend += tcOpenAI(row.model, row.inp, row.out);
-          }
-        }
 
-        let ti = 0,
-          to = 0;
-        for (const row of rows) {
-          ti += row.inp;
-          to += row.out;
-        }
+          const d = demoOpenAI(y, m);
+          const rows = aggOpenAI(d.usage);
+          const findings = findIssuesOpenAI(rows, d.projects);
 
-        const projectSpend: Record<string, { id: string; spend: number }> = {};
-        const projectNames: Record<string, string> = {};
-        (d.projects || []).forEach((p) => {
-          projectSpend[p.id] = { id: p.id, spend: 0 };
-          projectNames[p.id] = p.name || p.id;
-        });
-        if (d.costs && d.costs.data.length > 0) {
-          for (const bucket of d.costs.data) {
-            for (const result of bucket.results) {
-              const pid = result.project_id || "default";
-              if (!projectSpend[pid]) {
-                projectSpend[pid] = { id: pid, spend: 0 };
-                projectNames[pid] = result.project_name || pid;
+          let spend = 0;
+          if (d.costs && d.costs.data.length > 0) {
+            for (const bucket of d.costs.data) {
+              for (const result of bucket.results) {
+                spend += result.amount.value;
               }
-              projectSpend[pid].spend += result.amount.value;
+            }
+          } else {
+            for (const row of rows) {
+              spend += tcOpenAI(row.model, row.inp, row.out);
             }
           }
+
+          let ti = 0,
+            to = 0;
+          for (const row of rows) {
+            ti += row.inp;
+            to += row.out;
+          }
+
+          const projectSpend: Record<string, { id: string; spend: number }> =
+            {};
+          const projectNames: Record<string, string> = {};
+          (d.projects || []).forEach((p) => {
+            projectSpend[p.id] = { id: p.id, spend: 0 };
+            projectNames[p.id] = p.name || p.id;
+          });
+          if (d.costs && d.costs.data.length > 0) {
+            for (const bucket of d.costs.data) {
+              for (const result of bucket.results) {
+                const pid = result.project_id || "default";
+                if (!projectSpend[pid]) {
+                  projectSpend[pid] = { id: pid, spend: 0 };
+                  projectNames[pid] = result.project_name || pid;
+                }
+                projectSpend[pid].spend += result.amount.value;
+              }
+            }
+          }
+          const wss = Object.values(projectSpend)
+            .map((p) => ({ ...p, name: projectNames[p.id] || p.id }))
+            .sort((a, b) => b.spend - a.spend)
+            .slice(0, 10);
+
+          const report: Report = {
+            org: d.org,
+            spend,
+            savings: findings.reduce((s, f) => s + f.sav, 0),
+            tokens: ti + to,
+            findings,
+            wss,
+            keys: rows.length,
+            wc: d.projects?.length || wss.length || 1,
+            critCount: findings.filter((f) => f.sev === Severity.CRITICAL)
+              .length,
+            warnCount: findings.filter((f) => f.sev === Severity.WARNING)
+              .length,
+            infoCount: findings.filter((f) => f.sev === Severity.INFO).length,
+            highConfSavings: findings
+              .filter((f) => f.conf >= 0.65)
+              .reduce((s, f) => s + f.sav, 0),
+          };
+
+          storage.saveAnalysis(
+            id,
+            Vendor.OPENAI,
+            y,
+            m,
+            d.org.name || "Organization",
+            d.org.id || "",
+            report,
+            { ...d.raw, usage: d.usage }
+          );
         }
-        const wss = Object.values(projectSpend)
-          .map((p) => ({ ...p, name: projectNames[p.id] || p.id }))
+
+        router.push(
+          `/history/${id}/recommendations?year=${year}&month=${month}`
+        );
+        return;
+      }
+
+      setStep("Simulating 6 months of Anthropic usage...");
+      for (let i = 5; i >= 0; i--) {
+        let m = month - i;
+        let y = year;
+        while (m < 0) {
+          m += 12;
+          y--;
+        }
+
+        const d = demoAnthropic(y, m);
+        const bk = agg(d.bk);
+        const bm = agg(d.bm);
+        const src = bk.length ? bk : bm;
+        const findings = findIssues(
+          src,
+          d.ws,
+          d.rawBk.length ? d.rawBk : d.rawBm
+        );
+
+        let spend = 0,
+          ti = 0,
+          to = 0;
+        for (const a of bm.length ? bm : src) {
+          spend += tc(a.model, a.inp, a.out);
+          ti += a.inp;
+          to += a.out;
+        }
+
+        const wb = agg(d.bw);
+        const wa: Record<string, { id: string; spend: number }> = {};
+        const wn: Record<string, string> = {};
+        wa["default"] = { id: "default", spend: 0 };
+        wn["default"] = "default";
+        (d.ws || []).forEach((w) => {
+          wa[w.id] = { id: w.id, spend: 0 };
+          wn[w.id] = w.display_name || w.name || w.id;
+        });
+        for (const w of wb) {
+          const wid = w.wid || "default";
+          if (!wa[wid]) {
+            wa[wid] = { id: wid, spend: 0 };
+            wn[wid] = wid;
+          }
+          wa[wid].spend += tc(w.model, w.inp, w.out);
+        }
+        const wss = Object.values(wa)
+          .map((w) => ({ ...w, name: wn[w.id] || w.id }))
           .sort((a, b) => b.spend - a.spend)
           .slice(0, 10);
 
@@ -378,8 +473,9 @@ function HomeContent() {
           tokens: ti + to,
           findings,
           wss,
-          keys: rows.length,
-          wc: d.projects?.length || wss.length || 1,
+          keys:
+            new Set(src.map((s) => s.kid).filter(Boolean)).size || src.length,
+          wc: d.ws?.length || wss.length || 1,
           critCount: findings.filter((f) => f.sev === Severity.CRITICAL).length,
           warnCount: findings.filter((f) => f.sev === Severity.WARNING).length,
           infoCount: findings.filter((f) => f.sev === Severity.INFO).length,
@@ -390,91 +486,15 @@ function HomeContent() {
 
         storage.saveAnalysis(
           id,
-          Vendor.OPENAI,
-          year,
-          month,
+          Vendor.ANTHROPIC,
+          y,
+          m,
           d.org.name || "Organization",
-          d.org.id || "",
+          d.org.id,
           report,
-          { ...d.raw, usage: d.usage }
+          d.raw
         );
-
-        router.push(
-          `/history/${id}/recommendations?year=${year}&month=${month}`
-        );
-        return;
       }
-
-      setStep("Simulating Anthropic usage...");
-      const d = demoAnthropic(year, month);
-
-      const bk = agg(d.bk);
-      const bm = agg(d.bm);
-      const src = bk.length ? bk : bm;
-      const findings = findIssues(
-        src,
-        d.ws,
-        d.rawBk.length ? d.rawBk : d.rawBm
-      );
-
-      let spend = 0,
-        ti = 0,
-        to = 0;
-      for (const a of bm.length ? bm : src) {
-        spend += tc(a.model, a.inp, a.out);
-        ti += a.inp;
-        to += a.out;
-      }
-
-      const wb = agg(d.bw);
-      const wa: Record<string, { id: string; spend: number }> = {};
-      const wn: Record<string, string> = {};
-      wa["default"] = { id: "default", spend: 0 };
-      wn["default"] = "default";
-      (d.ws || []).forEach((w) => {
-        wa[w.id] = { id: w.id, spend: 0 };
-        wn[w.id] = w.display_name || w.name || w.id;
-      });
-      for (const w of wb) {
-        const wid = w.wid || "default";
-        if (!wa[wid]) {
-          wa[wid] = { id: wid, spend: 0 };
-          wn[wid] = wid;
-        }
-        wa[wid].spend += tc(w.model, w.inp, w.out);
-      }
-      const wss = Object.values(wa)
-        .map((w) => ({ ...w, name: wn[w.id] || w.id }))
-        .sort((a, b) => b.spend - a.spend)
-        .slice(0, 10);
-
-      const report: Report = {
-        org: d.org,
-        spend,
-        savings: findings.reduce((s, f) => s + f.sav, 0),
-        tokens: ti + to,
-        findings,
-        wss,
-        keys: new Set(src.map((s) => s.kid).filter(Boolean)).size || src.length,
-        wc: d.ws?.length || wss.length || 1,
-        critCount: findings.filter((f) => f.sev === Severity.CRITICAL).length,
-        warnCount: findings.filter((f) => f.sev === Severity.WARNING).length,
-        infoCount: findings.filter((f) => f.sev === Severity.INFO).length,
-        highConfSavings: findings
-          .filter((f) => f.conf >= 0.65)
-          .reduce((s, f) => s + f.sav, 0),
-      };
-
-      storage.saveAnalysis(
-        id,
-        Vendor.ANTHROPIC,
-        year,
-        month,
-        d.org.name || "Organization",
-        d.org.id,
-        report,
-        d.raw
-      );
 
       router.push(`/history/${id}/recommendations?year=${year}&month=${month}`);
     } catch (x: unknown) {

@@ -20,6 +20,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { tcOpenAI } from "@/lib/openai/pricing";
+import { forecast } from "@/lib/forecast";
 
 export default function AnalyticsPage() {
   const params = useParams();
@@ -770,6 +771,8 @@ export default function AnalyticsPage() {
     );
   }
 
+  const forecastResult = forecast(analysisRecord, 3);
+
   const monthNames = [
     "Jan",
     "Feb",
@@ -953,6 +956,70 @@ export default function AnalyticsPage() {
         />
         <Stat label={`Tokens / ${year}`} value={T(yearTokens)} />
       </div>
+
+      {/* Spend Forecast */}
+      {forecastResult && (
+        <div className="rounded-2xl border border-ink-border bg-ink-elevated/40 p-5">
+          <div className="flex items-center justify-between mb-1">
+            <h3 className="text-[10px] font-bold text-bone-subtle font-display tracking-wider">
+              SPEND FORECAST
+            </h3>
+            <span
+              className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                forecastResult.r2 >= 0.7
+                  ? "bg-moss/20 text-moss"
+                  : forecastResult.r2 >= 0.4
+                    ? "bg-amber-500/20 text-amber-400"
+                    : "bg-slate-500/20 text-slate-400"
+              }`}
+            >
+              {forecastResult.r2 >= 0.7
+                ? "HIGH"
+                : forecastResult.r2 >= 0.4
+                  ? "MEDIUM"
+                  : "LOW"}{" "}
+              CONFIDENCE
+            </span>
+          </div>
+          <p className="text-[10px] text-bone-subtle/50 mb-4">
+            Linear projection · {forecastResult.dataPoints} months of data · R²{" "}
+            {forecastResult.r2.toFixed(2)}
+          </p>
+
+          <div className="grid grid-cols-3 gap-3 mb-4">
+            {forecastResult.predictions.map((p, i) => (
+              <div
+                key={i}
+                className="bg-ink-border/30 rounded-xl p-3 border border-ink-border/50"
+              >
+                <div className="text-[10px] text-bone-subtle mb-1">
+                  {monthNames[p.month]} {p.year}
+                </div>
+                <div className="text-lg font-bold text-bone font-mono">
+                  {$(p.spend)}
+                </div>
+                {i === 0 && (
+                  <div className="text-[9px] text-bone-subtle/50 mt-0.5">
+                    next month
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <span
+              className={`text-xs font-semibold ${forecastResult.slope >= 0 ? "text-red-400" : "text-moss"}`}
+            >
+              {forecastResult.slope >= 0 ? "↑" : "↓"}{" "}
+              {$(Math.abs(forecastResult.slope))}/mo trend
+            </span>
+            <span className="text-[10px] text-bone-subtle/50">
+              {forecastResult.slope >= 0 ? "spend growing" : "spend declining"}
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Workspace Spend Breakdown */}
       {sortedWorkspaces.length > 0 && (
