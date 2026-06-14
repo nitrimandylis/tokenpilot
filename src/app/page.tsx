@@ -35,10 +35,27 @@ const DEFAULT_TICKER = [
 ];
 
 function formatModelId(id: string, provider: "anthropic" | "openai"): string {
-  const clean = id.replace(/-\d{8}$/, "");
+  // strip date suffixes: -20241022 or -2024-11-20
+  const clean = id.replace(/-\d{8}$/, "").replace(/-\d{4}-\d{2}-\d{2}$/, "");
   if (provider === "openai") {
-    if (clean.startsWith("gpt-")) return "GPT-" + clean.slice(4);
-    return clean; // o1, o3, o4-mini etc
+    if (clean.startsWith("gpt-")) {
+      // gpt-5.5-pro → GPT-5.5 Pro, gpt-5.5 → GPT-5.5
+      return (
+        "GPT-" +
+        clean
+          .slice(4)
+          .replace(/-([a-z])/g, (_, c: string) => " " + c.toUpperCase())
+      );
+    }
+    // codex-mini-latest → Codex Mini, o4-mini → o4-mini (already readable)
+    if (clean.startsWith("codex")) {
+      return clean
+        .replace(/-latest$/, "")
+        .split("-")
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(" ");
+    }
+    return clean; // o1, o3, o4-mini, chatgpt-* etc
   }
   // Anthropic: split on hyphens, merge consecutive digit tokens with "."
   const parts = clean
@@ -72,15 +89,62 @@ function modelDate(id: string): number {
   // -2024-11-20 suffix
   const m2 = id.match(/-(\d{4})-(\d{2})-(\d{2})$/);
   if (m2) return parseInt(m2[1] + m2[2] + m2[3]);
-  // No date = canonical current version, sort high
+  // No date = canonical alias, sort high
   return 99999999;
+}
+
+// Version rank: higher = newer. Used as tiebreaker when dates are equal.
+// Returns a score so newest model families (gpt-5.5, codex, claude-opus-4-8) rank first.
+function modelRank(id: string): number {
+  // OpenAI gpt-X.Y — gpt-5.5 → 550, gpt-5.4 → 540, gpt-4.1 → 410
+  const gpt = id.match(/^gpt-(\d+)(?:\.(\d+))?/);
+  if (gpt) {
+    const base = parseInt(gpt[1]) * 100 + (gpt[2] ? parseInt(gpt[2]) * 10 : 0);
+    // penalise non-base variants so base model ID surfaces first
+    const variant =
+      /-(pro|mini|nano|audio|realtime|search|transcribe|tts|image|diarize|chat-latest)/.test(
+        id
+      )
+        ? -3
+        : 0;
+    return base + variant;
+  }
+  // OpenAI codex family: treat as near-top (alongside gpt-5.5)
+  if (id.startsWith("codex")) return 548;
+  // OpenAI o-series: o4=350, o3=250, o1=50 (between gpt-3 and gpt-4)
+  const oSeries = id.match(/^o(\d+)/);
+  if (oSeries) {
+    const gen = parseInt(oSeries[1]) * 100 - 50;
+    return gen + (id.endsWith("-pro") ? 2 : id.includes("-mini") ? -1 : 0);
+  }
+  // Anthropic claude-MODEL-MAJOR-MINOR (e.g. claude-opus-4-8 → 4.8)
+  const claude = id.match(/^claude-(?:opus|sonnet|haiku|fable)-(\d+)-(\d+)/);
+  if (claude) {
+    const base = parseInt(claude[1]) * 100 + parseInt(claude[2]) * 10;
+    const tier = /^claude-opus/.test(id)
+      ? 5
+      : /^claude-fable/.test(id)
+        ? 4
+        : /^claude-sonnet/.test(id)
+          ? 3
+          : 1;
+    return base + tier;
+  }
+  // Anthropic claude-MODEL-MAJOR with no minor (e.g. claude-fable-5, claude-opus-4)
+  const claudeShort = id.match(/^claude-(?:opus|sonnet|haiku|fable)-(\d+)$/);
+  if (claudeShort) {
+    return parseInt(claudeShort[1]) * 100 + 4;
+  }
+  return 0;
 }
 
 function isLegacy(id: string): boolean {
   return (
     /^gpt-3/.test(id) ||
-    /^gpt-4(?!o)/.test(id) || // gpt-4, gpt-4-turbo — but NOT gpt-4o
-    /^(davinci|babbage|ada|curie|text-|code-)/.test(id)
+    /^gpt-4(?!o|\.1)/.test(id) || // drop gpt-4/gpt-4-turbo but keep gpt-4o, gpt-4.1
+    /^(davinci|babbage|ada|curie|text-|code-)/.test(id) ||
+    /^ft:/.test(id) || // fine-tune variants
+    /^claude-3-(?!7)/.test(id) // old claude-3.x except 3.7
   );
 }
 
@@ -128,7 +192,8 @@ function HomeContent() {
           .sort((a, b) => {
             const dd = modelDate(b.id) - modelDate(a.id);
             if (dd !== 0) return dd;
-            return b.input - a.input; // tiebreak: higher cost = frontier model
+            // same date bucket → sort by model generation/version
+            return modelRank(b.id) - modelRank(a.id);
           })
           .slice(0, n);
       const fmt = (
