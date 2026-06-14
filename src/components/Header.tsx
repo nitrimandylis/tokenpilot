@@ -5,7 +5,7 @@ interface HeaderProps {
   showGuide?: boolean;
   showHistory?: boolean;
   showNewReport?: boolean;
-  currentPage?: "home" | "guide" | "history" | "analysis";
+  currentPage?: "home" | "guide" | "history" | "analysis" | "pricing";
   vendor?: Vendor;
 }
 
@@ -28,6 +28,16 @@ export default function Header({
           </span>
         </Link>
         <div className="flex items-center gap-4">
+          <Link
+            href="/pricing"
+            className={`text-sm font-sans transition-colors ${
+              currentPage === "pricing"
+                ? "text-bone border-b-2 border-moss pb-0.5"
+                : "text-bone-subtle hover:text-bone"
+            }`}
+          >
+            Pricing
+          </Link>
           {showGuide && (
             <Link
               href="/guide"
