@@ -80,10 +80,26 @@ function getHistory(): StoredHistory {
  */
 function saveHistory(history: StoredHistory): void {
   if (typeof window === "undefined") return;
-  try {
-    localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history));
-  } catch (e) {
-    console.error("Failed to save history:", e);
+  // On quota errors, evict the oldest analysis and retry. Each analysis stores
+  // full raw API responses, so a few accumulate past the ~5MB localStorage cap.
+  // ponytail: oldest-first eviction; if a single record alone overflows, give up.
+  let working = history;
+  for (;;) {
+    try {
+      localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(working));
+      return;
+    } catch (e) {
+      const ids = Object.keys(working);
+      if (ids.length <= 1) {
+        console.error("Failed to save history (storage full):", e);
+        return;
+      }
+      const oldest = ids.reduce((a, b) =>
+        (working[a].createdAt || "") <= (working[b].createdAt || "") ? a : b
+      );
+      working = { ...working };
+      delete working[oldest];
+    }
   }
 }
 
