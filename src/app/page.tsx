@@ -10,6 +10,8 @@ import { pull as pullAnthropic } from "@/lib/anthropic/api";
 import { pull as pullOpenAI } from "@/lib/openai/api";
 import { agg, findIssues } from "@/lib/anthropic/analysis";
 import { aggOpenAI, findIssuesOpenAI } from "@/lib/openai/analysis";
+import { findIssuesLLM } from "@/lib/nim/analysis";
+import { toSummariesAnthropic, toSummariesOpenAI } from "@/lib/nim/adapters";
 import { tc } from "@/lib/anthropic/pricing";
 import { tcOpenAI } from "@/lib/openai/pricing";
 import { demoAnthropic, demoOpenAI } from "@/lib/demo";
@@ -166,6 +168,25 @@ function HomeContent() {
   const [step, setStep] = useState("");
   const [tickerItems, setTickerItems] = useState(DEFAULT_TICKER);
 
+  // NVIDIA NIM LLM analysis: a persisted on/off setting. The key lives in a
+  // server env var (NIM_API_KEY); the toggle only shows when the server reports
+  // NIM is configured.
+  const [nimAvailable, setNimAvailable] = useState(false);
+  const [useNim, setUseNim] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/nim")
+      .then((r) => r.json())
+      .then((d) => setNimAvailable(!!d?.enabled))
+      .catch(() => setNimAvailable(false));
+    setUseNim(localStorage.getItem("tokenpilot_use_nim") === "1");
+  }, []);
+
+  const toggleNim = (on: boolean) => {
+    setUseNim(on);
+    localStorage.setItem("tokenpilot_use_nim", on ? "1" : "0");
+  };
+
   const buildTicker = useCallback(
     (
       data: Record<
@@ -232,6 +253,44 @@ function HomeContent() {
     router.push(`/?${params.toString()}`);
   };
 
+  // Choose NIM-guided LLM analysis when the setting is on, else the rule engine.
+  // NIM errors propagate to the caller so they surface in the UI rather than
+  // silently falling back. Used by both the real analysis and the demo.
+  const nimOn = () => useNim && nimAvailable;
+
+  const analyzeAnthropic = async (
+    src: Parameters<typeof toSummariesAnthropic>[0],
+    ws: Parameters<typeof toSummariesAnthropic>[1],
+    buckets: Parameters<typeof toSummariesAnthropic>[2],
+    spend: number
+  ) => {
+    if (nimOn()) {
+      setStep("Analyzing usage with NVIDIA NIM...");
+      return findIssuesLLM(toSummariesAnthropic(src, ws, buckets), {
+        vendor: "anthropic",
+        totalSpend: spend,
+        workspaceCount: ws?.length || 0,
+      });
+    }
+    return findIssues(src, ws, buckets);
+  };
+
+  const analyzeOpenAI = async (
+    rows: Parameters<typeof toSummariesOpenAI>[0],
+    projects: Parameters<typeof toSummariesOpenAI>[1],
+    spend: number
+  ) => {
+    if (nimOn()) {
+      setStep("Analyzing usage with NVIDIA NIM...");
+      return findIssuesLLM(toSummariesOpenAI(rows, projects), {
+        vendor: "openai",
+        totalSpend: spend,
+        workspaceCount: projects?.length || 0,
+      });
+    }
+    return findIssuesOpenAI(rows, projects);
+  };
+
   const startAnalysis = async () => {
     if (!key.trim()) {
       setErr("Enter your Admin API key");
@@ -276,7 +335,6 @@ function HomeContent() {
 
         // Process data into report
         const rows = aggOpenAI(d.usage);
-        const findings = findIssuesOpenAI(rows, d.projects);
 
         // Calculate total spend and tokens
         // Use actual costs from Costs API if available, otherwise calculate from usage
@@ -294,6 +352,8 @@ function HomeContent() {
             spend += tcOpenAI(row.model, row.inp, row.out);
           }
         }
+
+        const findings = await analyzeOpenAI(rows, d.projects, spend);
 
         let ti = 0;
         let to = 0;
@@ -399,11 +459,7 @@ function HomeContent() {
       const bk = agg(d.bk);
       const bm = agg(d.bm);
       const src = bk.length ? bk : bm;
-      const findings = findIssues(
-        src,
-        d.ws,
-        d.rawBk.length ? d.rawBk : d.rawBm
-      );
+      const buckets = d.rawBk.length ? d.rawBk : d.rawBm;
 
       let spend = 0;
       let ti = 0;
@@ -413,6 +469,8 @@ function HomeContent() {
         ti += a.inp;
         to += a.out;
       }
+
+      const findings = await analyzeAnthropic(src, d.ws, buckets, spend);
 
       const wb = agg(d.bw);
 
@@ -513,7 +571,6 @@ function HomeContent() {
 
           const d = demoOpenAI(y, m);
           const rows = aggOpenAI(d.usage);
-          const findings = findIssuesOpenAI(rows, d.projects);
 
           let spend = 0;
           if (d.costs && d.costs.data.length > 0) {
@@ -527,6 +584,8 @@ function HomeContent() {
               spend += tcOpenAI(row.model, row.inp, row.out);
             }
           }
+
+          const findings = await analyzeOpenAI(rows, d.projects, spend);
 
           let ti = 0,
             to = 0;
@@ -609,11 +668,7 @@ function HomeContent() {
         const bk = agg(d.bk);
         const bm = agg(d.bm);
         const src = bk.length ? bk : bm;
-        const findings = findIssues(
-          src,
-          d.ws,
-          d.rawBk.length ? d.rawBk : d.rawBm
-        );
+        const buckets = d.rawBk.length ? d.rawBk : d.rawBm;
 
         let spend = 0,
           ti = 0,
@@ -623,6 +678,8 @@ function HomeContent() {
           ti += a.inp;
           to += a.out;
         }
+
+        const findings = await analyzeAnthropic(src, d.ws, buckets, spend);
 
         const wb = agg(d.bw);
         const wa: Record<string, { id: string; spend: number }> = {};
@@ -789,6 +846,27 @@ function HomeContent() {
                     ? "Platform → Settings → Admin Keys → Create new admin key (read-only)"
                     : "Console → API Keys → Admin Keys → Create admin key (read-only)"}
                 </p>
+
+                {/* AI analysis setting — only shown when NIM is configured server-side */}
+                {nimAvailable && (
+                  <label
+                    htmlFor="nim-toggle"
+                    className="mt-4 w-full max-w-lg flex items-center gap-3 cursor-pointer select-none"
+                  >
+                    <input
+                      id="nim-toggle"
+                      type="checkbox"
+                      checked={useNim}
+                      onChange={(e) => toggleNim(e.target.checked)}
+                      className="h-4 w-4 accent-moss cursor-pointer"
+                    />
+                    <span className="text-[11px] text-bone-subtle font-mono">
+                      {useNim
+                        ? "✓ AI analysis on — an NVIDIA NIM model reasons over your usage instead of fixed rules."
+                        : "Use AI analysis (NVIDIA NIM) instead of the built-in rule engine."}
+                    </span>
+                  </label>
+                )}
 
                 {/* Demo mode */}
                 <div className="mt-4 flex items-center gap-3 w-full">
