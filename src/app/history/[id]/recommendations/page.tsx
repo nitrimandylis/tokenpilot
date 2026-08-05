@@ -219,6 +219,7 @@ function RecommendationsPageContent() {
               highConfSavings: findings
                 .filter((f) => f.conf >= 0.65)
                 .reduce((s, f) => s + f.sav, 0),
+              engine: "rules" as const,
             };
 
             storage.saveAnalysis(
@@ -385,6 +386,7 @@ function RecommendationsPageContent() {
                 .length,
               infoCount: findings.filter((f) => f.sev === Severity.INFO).length,
               highConfSavings: totalHighConfSavings,
+              engine: "rules" as const,
             };
 
             storage.saveAnalysis(
@@ -580,6 +582,12 @@ function RecommendationsPageContent() {
           <span className="text-sm text-bone font-medium">
             {analysisRecord.orgName}
           </span>
+          <span
+            className="px-2 py-0.5 rounded-full border border-ink-border bg-ink-elevated text-[10px] font-mono text-bone-subtle"
+            title="Which analysis engine produced this report"
+          >
+            {(r.engine ?? "rules") === "llm" ? "LLM analysis" : "Rule engine"}
+          </span>
           {r && r.savings > 0 && (
             <span className="px-2 py-0.5 rounded-full bg-moss/10 border border-moss/20 text-xs font-mono font-medium text-moss-light">
               Save {$(r.savings)}/mo
@@ -720,6 +728,26 @@ function RecommendationsPageContent() {
           Raw data
         </Link>
       </div>
+
+      {/* Engine notice (e.g. LLM unavailable → deterministic fallback) */}
+      {r.notice && (
+        <div className="flex items-start gap-3 rounded-sm border border-warning/30 bg-warning/5 px-4 py-3">
+          <svg
+            className="w-4 h-4 text-warning shrink-0 mt-0.5"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
+          </svg>
+          <p className="text-xs text-warning/90">{r.notice}</p>
+        </div>
+      )}
 
       {/* Stale-pricing warning */}
       {pricingStale && (
@@ -1161,6 +1189,22 @@ function RecommendationsPageContent() {
           </p>
         </div>
       )}
+
+      {/* Report footer: pricing provenance + analysis ROI */}
+      <div className="border-t border-ink-border pt-4 space-y-1">
+        <p className="text-[11px] text-bone-subtle font-mono">
+          Prices as of {pricingDate}
+        </p>
+        {r.engine === "llm" && r.llmUsage && (
+          <p className="text-[11px] text-bone-subtle font-mono">
+            This analysis cost ~$
+            {r.llmUsage.costUsd < 0.01
+              ? r.llmUsage.costUsd.toFixed(3)
+              : r.llmUsage.costUsd.toFixed(2)}{" "}
+            in LLM tokens and found {$(r.savings)}/mo in savings.
+          </p>
+        )}
+      </div>
 
       {/* Month Picker Modal */}
       {showMonthPicker && (

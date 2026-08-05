@@ -239,6 +239,7 @@ export default function AnalyticsPage() {
               highConfSavings: findings
                 .filter((f) => f.conf >= 0.65)
                 .reduce((s, f) => s + f.sav, 0),
+              engine: "rules" as const,
             };
 
             storage.saveAnalysis(
@@ -462,6 +463,7 @@ export default function AnalyticsPage() {
               highConfSavings: findings
                 .filter((f) => f.conf >= 0.65)
                 .reduce((s, f) => s + f.sav, 0),
+              engine: "rules" as const,
             };
 
             storage.saveAnalysis(
