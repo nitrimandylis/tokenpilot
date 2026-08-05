@@ -10,11 +10,15 @@ import { pull as pullAnthropic } from "@/lib/anthropic/api";
 import { pull as pullOpenAI } from "@/lib/openai/api";
 import { agg, findIssues } from "@/lib/anthropic/analysis";
 import { aggOpenAI, findIssuesOpenAI } from "@/lib/openai/analysis";
-import { findIssuesLLM } from "@/lib/nim/analysis";
+import {
+  analyzeWithFallback,
+  findIssuesLLM,
+  type AnalysisOutcome,
+} from "@/lib/nim/analysis";
 import { toSummariesAnthropic, toSummariesOpenAI } from "@/lib/nim/adapters";
 import { tc } from "@/lib/anthropic/pricing";
 import { tcOpenAI } from "@/lib/openai/pricing";
-import { demoAnthropic, demoOpenAI } from "@/lib/demo";
+import { demoAnthropic, demoOpenAI, DEMO_SEED } from "@/lib/demo";
 import type { Report } from "@/types";
 import Footer from "@/components/Footer";
 import { FadeUp } from "@/components/motion/FadeUp";
@@ -254,8 +258,8 @@ function HomeContent() {
   };
 
   // Choose NIM-guided LLM analysis when the setting is on, else the rule engine.
-  // NIM errors propagate to the caller so they surface in the UI rather than
-  // silently falling back. Used by both the real analysis and the demo.
+  // A NIM failure falls back to the deterministic rules and stamps a notice on
+  // the report instead of erroring out. Used by both the real analysis and the demo.
   const nimOn = () => useNim && nimAvailable;
 
   const analyzeAnthropic = async (
@@ -263,32 +267,40 @@ function HomeContent() {
     ws: Parameters<typeof toSummariesAnthropic>[1],
     buckets: Parameters<typeof toSummariesAnthropic>[2],
     spend: number
-  ) => {
+  ): Promise<AnalysisOutcome> => {
     if (nimOn()) {
       setStep("Analyzing usage with NVIDIA NIM...");
-      return findIssuesLLM(toSummariesAnthropic(src, ws, buckets), {
-        vendor: "anthropic",
-        totalSpend: spend,
-        workspaceCount: ws?.length || 0,
-      });
+      return analyzeWithFallback(
+        () =>
+          findIssuesLLM(toSummariesAnthropic(src, ws, buckets), {
+            vendor: "anthropic",
+            totalSpend: spend,
+            workspaceCount: ws?.length || 0,
+          }),
+        () => findIssues(src, ws, buckets)
+      );
     }
-    return findIssues(src, ws, buckets);
+    return { findings: findIssues(src, ws, buckets), engine: "rules" };
   };
 
   const analyzeOpenAI = async (
     rows: Parameters<typeof toSummariesOpenAI>[0],
     projects: Parameters<typeof toSummariesOpenAI>[1],
     spend: number
-  ) => {
+  ): Promise<AnalysisOutcome> => {
     if (nimOn()) {
       setStep("Analyzing usage with NVIDIA NIM...");
-      return findIssuesLLM(toSummariesOpenAI(rows, projects), {
-        vendor: "openai",
-        totalSpend: spend,
-        workspaceCount: projects?.length || 0,
-      });
+      return analyzeWithFallback(
+        () =>
+          findIssuesLLM(toSummariesOpenAI(rows, projects), {
+            vendor: "openai",
+            totalSpend: spend,
+            workspaceCount: projects?.length || 0,
+          }),
+        () => findIssuesOpenAI(rows, projects)
+      );
     }
-    return findIssuesOpenAI(rows, projects);
+    return { findings: findIssuesOpenAI(rows, projects), engine: "rules" };
   };
 
   const startAnalysis = async () => {
@@ -353,7 +365,8 @@ function HomeContent() {
           }
         }
 
-        const findings = await analyzeOpenAI(rows, d.projects, spend);
+        const analysis = await analyzeOpenAI(rows, d.projects, spend);
+        const findings = analysis.findings;
 
         let ti = 0;
         let to = 0;
@@ -428,6 +441,9 @@ function HomeContent() {
           highConfSavings: findings
             .filter((f) => f.conf >= 0.65)
             .reduce((s, f) => s + f.sav, 0),
+          engine: analysis.engine,
+          notice: analysis.notice,
+          llmUsage: analysis.llmUsage,
         };
 
         storage.saveAnalysis(
@@ -470,7 +486,8 @@ function HomeContent() {
         to += a.out;
       }
 
-      const findings = await analyzeAnthropic(src, d.ws, buckets, spend);
+      const analysis = await analyzeAnthropic(src, d.ws, buckets, spend);
+      const findings = analysis.findings;
 
       const wb = agg(d.bw);
 
@@ -518,6 +535,9 @@ function HomeContent() {
         highConfSavings: findings
           .filter((f) => f.conf >= 0.65)
           .reduce((s, f) => s + f.sav, 0),
+        engine: analysis.engine,
+        notice: analysis.notice,
+        llmUsage: analysis.llmUsage,
       };
 
       // Save to localStorage
@@ -569,7 +589,7 @@ function HomeContent() {
             y--;
           }
 
-          const d = demoOpenAI(y, m);
+          const d = demoOpenAI(y, m, DEMO_SEED);
           const rows = aggOpenAI(d.usage);
 
           let spend = 0;
@@ -585,7 +605,8 @@ function HomeContent() {
             }
           }
 
-          const findings = await analyzeOpenAI(rows, d.projects, spend);
+          const analysis = await analyzeOpenAI(rows, d.projects, spend);
+          const findings = analysis.findings;
 
           let ti = 0,
             to = 0;
@@ -635,6 +656,9 @@ function HomeContent() {
             highConfSavings: findings
               .filter((f) => f.conf >= 0.65)
               .reduce((s, f) => s + f.sav, 0),
+            engine: analysis.engine,
+            notice: analysis.notice,
+            llmUsage: analysis.llmUsage,
           };
 
           storage.saveAnalysis(
@@ -664,7 +688,7 @@ function HomeContent() {
           y--;
         }
 
-        const d = demoAnthropic(y, m);
+        const d = demoAnthropic(y, m, DEMO_SEED);
         const bk = agg(d.bk);
         const bm = agg(d.bm);
         const src = bk.length ? bk : bm;
@@ -679,7 +703,8 @@ function HomeContent() {
           to += a.out;
         }
 
-        const findings = await analyzeAnthropic(src, d.ws, buckets, spend);
+        const analysis = await analyzeAnthropic(src, d.ws, buckets, spend);
+        const findings = analysis.findings;
 
         const wb = agg(d.bw);
         const wa: Record<string, { id: string; spend: number }> = {};
@@ -719,6 +744,9 @@ function HomeContent() {
           highConfSavings: findings
             .filter((f) => f.conf >= 0.65)
             .reduce((s, f) => s + f.sav, 0),
+          engine: analysis.engine,
+          notice: analysis.notice,
+          llmUsage: analysis.llmUsage,
         };
 
         storage.saveAnalysis(

@@ -9,11 +9,22 @@
  * here so dollar figures stay grounded and the model can't hallucinate numbers.
  */
 
-import type { Finding, TemporalPattern } from "@/types";
+import type {
+  AnalysisEngine,
+  Finding,
+  LlmUsage,
+  TemporalPattern,
+} from "@/types";
 import { Severity } from "@/types/analysis";
 
 /** Default NIM-hosted model. OpenAI-compatible chat completions. */
 export const NIM_DEFAULT_MODEL = "meta/llama-3.3-70b-instruct";
+
+/**
+ * Approximate hosted price for the default NIM model ($/MTok), used only to
+ * estimate what the analysis call itself cost for the ROI footer.
+ */
+export const NIM_PRICE_PER_MTOK = { input: 0.3, output: 0.9 };
 
 /* ─────────────── ANALYSIS RULES (LLM guidance) ─────────────── */
 
@@ -355,17 +366,51 @@ function parseFindings(content: string): LlmFinding[] {
   return Array.isArray(parsed) ? parsed : parsed.findings || [];
 }
 
+export interface LlmAnalysisResult {
+  findings: Finding[];
+  usage?: LlmUsage;
+}
+
+/** Outcome of an analysis run: findings plus which engine produced them. */
+export interface AnalysisOutcome {
+  findings: Finding[];
+  engine: AnalysisEngine;
+  notice?: string;
+  llmUsage?: LlmUsage;
+}
+
+export const LLM_FALLBACK_NOTICE =
+  "LLM unavailable, showing deterministic analysis";
+
+/**
+ * Run the LLM analysis; on any failure fall back to the deterministic rule
+ * engine and surface a notice so the report says which engine actually ran.
+ */
+export async function analyzeWithFallback(
+  llm: () => Promise<LlmAnalysisResult>,
+  rules: () => Finding[]
+): Promise<AnalysisOutcome> {
+  try {
+    const res = await llm();
+    return { findings: res.findings, engine: "llm", llmUsage: res.usage };
+  } catch (e) {
+    console.warn("LLM analysis failed, falling back to rule engine:", e);
+    return { findings: rules(), engine: "rules", notice: LLM_FALLBACK_NOTICE };
+  }
+}
+
 /**
  * Run LLM-guided analysis via NVIDIA NIM. Returns Findings in the same shape as
- * the hardcoded engines. Throws on transport/parse failure so callers can fall
- * back to the rule engine.
+ * the hardcoded engines, plus the NIM call's own token usage when the response
+ * reports it. Throws on transport/parse failure so callers can fall back to
+ * the rule engine (see analyzeWithFallback).
  */
 export async function findIssuesLLM(
   rows: UsageSummary[],
   ctx: AnalysisContext
-): Promise<Finding[]> {
+): Promise<LlmAnalysisResult> {
   const payload = summarize(rows);
-  if (payload.length === 0) return [];
+  if (payload.length === 0) return { findings: [] };
 
   const body = {
     model: ctx.model || NIM_DEFAULT_MODEL,
@@ -414,5 +459,21 @@ export async function findIssuesLLM(
   const content: string = data?.choices?.[0]?.message?.content ?? "";
   if (!content) throw new Error("NIM returned an empty response");
 
-  return mergeLlmFindings(parseFindings(content), rows, ctx);
+  const u = data?.usage;
+  const usage: LlmUsage | undefined =
+    u && (u.prompt_tokens || u.completion_tokens)
+      ? {
+          promptTokens: u.prompt_tokens ?? 0,
+          completionTokens: u.completion_tokens ?? 0,
+          costUsd:
+            ((u.prompt_tokens ?? 0) * NIM_PRICE_PER_MTOK.input +
+              (u.completion_tokens ?? 0) * NIM_PRICE_PER_MTOK.output) /
+            1_000_000,
+        }
+      : undefined;
+
+  return {
+    findings: mergeLlmFindings(parseFindings(content), rows, ctx),
+    usage,
+  };
 }

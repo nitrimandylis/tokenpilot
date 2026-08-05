@@ -114,6 +114,18 @@ export interface WorkspaceSpend {
   spend: number;
 }
 
+// Which engine produced a report's findings. "rules" = deterministic rule
+// engine; "llm" = NVIDIA NIM LLM-guided analysis.
+export type AnalysisEngine = "rules" | "llm";
+
+// Token usage of the NIM analysis call itself, for the ROI footer on
+// LLM-engine reports.
+export interface LlmUsage {
+  promptTokens: number;
+  completionTokens: number;
+  costUsd: number;
+}
+
 export interface Report {
   org: Organization;
   spend: number;
@@ -127,4 +139,8 @@ export interface Report {
   warnCount: number;
   infoCount: number;
   highConfSavings: number;
+  // Optional so reports stored before these fields existed still parse.
+  engine?: AnalysisEngine;
+  notice?: string; // e.g. LLM-fallback notice, shown in the report header
+  llmUsage?: LlmUsage; // only set on engine === "llm" reports
 }
