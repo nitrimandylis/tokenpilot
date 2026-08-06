@@ -1,8 +1,22 @@
 /* ═══════════════════ OpenAI ANALYSIS ENGINE ═══════════════════ */
 
-import type { Finding } from "@/types";
+import type { Finding, FindingSignal } from "@/types";
 import { OpenAICategory, Severity } from "@/types/analysis";
 import { prOpenAI, tcOpenAI } from "./pricing";
+import {
+  costBatchDiscountOpenAI,
+  costEnableCachingOpenAI,
+  costGpt4oDowngrade,
+  costLegacyGpt4Upgrade,
+  costMiniDowngrade,
+  costModelUpgradeOpenAI,
+  costPromptTrim,
+  costRagReductionOpenAI,
+  costTenPercentTrim,
+  ragReductionFactorOpenAI,
+  upgradeTargetOpenAI,
+  type OpenAICostRow,
+} from "./costing";
 import { $, P } from "@/lib/formatters";
 import type { OpenAIUsageData } from "./api";
 
@@ -211,6 +225,15 @@ export function findIssuesOpenAI(
     // If using costs API without token data, skip token-based rules
     const hasTokenData = r.inp > 0 || r.out > 0;
 
+    // Shared input to the costing module — all optimized costs derive from it.
+    const costRow: OpenAICostRow = {
+      model: r.model || r.line_item || "",
+      inp: r.inp,
+      out: r.out,
+      cur,
+      conf: 0,
+    };
+
     const isGPT4O =
       r.model.toLowerCase().includes("gpt-4o") &&
       !r.model.toLowerCase().includes("mini");
@@ -233,7 +256,8 @@ export function findIssuesOpenAI(
       action: string,
       severity: Severity,
       confidence: number,
-      impact?: string
+      impact?: string,
+      signals?: FindingSignal[]
     ) => {
       // Skip if this category was already added for this model
       if (addedCategories.has(category)) {
@@ -279,6 +303,8 @@ export function findIssuesOpenAI(
             batchCandidate: false,
             meanDaily: r.activeDays > 0 ? r.reqs / r.activeDays : 0,
           },
+          source: "rules",
+          signals,
         });
       }
     };
@@ -313,7 +339,7 @@ export function findIssuesOpenAI(
       // WARNING if >20% of total spend OR >$20, otherwise INFO
       const sev =
         spendPercent > 0.2 || cur > 20 ? Severity.WARNING : Severity.INFO;
-      const opt = cur * 0.9; // Conservative 10% optimization potential
+      const opt = costTenPercentTrim(costRow); // Conservative 10% optimization potential
       addFinding(
         OpenAICategory.HIGH_IMPACT_OPPORTUNITY,
         opt,
@@ -328,20 +354,18 @@ export function findIssuesOpenAI(
     // Detect patterns where prompt caching could save costs
     // Large, consistent input + many requests = prime candidate
     if (hasTokenData && ai > 2000 && r.reqs > 100 && r.inp > 5e6) {
-      const signals = [
-        { weight: 0.3, met: ai > 5000 }, // Large prompts
-        { weight: 0.25, met: r.reqs > 500 }, // High volume
-        { weight: 0.2, met: ratio > 3 }, // Input-heavy
-        { weight: 0.15, met: r.activeDays > 15 }, // Sustained usage
-        { weight: 0.1, met: !isGPT4OMini }, // Higher-tier model
+      const signals: FindingSignal[] = [
+        { weight: 0.3, met: ai > 5000, label: "avg input > 5k tok" },
+        { weight: 0.25, met: r.reqs > 500, label: "500+ requests" },
+        { weight: 0.2, met: ratio > 3, label: "input-heavy (ratio > 3:1)" },
+        { weight: 0.15, met: r.activeDays > 15, label: "15+ active days" },
+        { weight: 0.1, met: !isGPT4OMini, label: "higher-tier model" },
       ];
       const conf = confidenceScore(signals);
       if (conf >= 0.45) {
-        // Estimate 50% of input tokens could be cached (conservative)
-        const cacheableTokens = r.inp * 0.5;
-        // Cached tokens cost 50% less on input, 0 on subsequent reads
-        const cacheSavings = (cacheableTokens / 1e6) * p.i * 0.5;
-        const opt = cur - cacheSavings;
+        // 50% of input assumed cacheable at half input price (conservative)
+        const opt = costEnableCachingOpenAI(costRow);
+        const cacheSavings = cur - opt;
         const reason = `Large avg input (~${ai.toLocaleString()} tok/req) across ${r.reqs.toLocaleString()} requests. ${(r.inp / 1e6).toFixed(1)}M input tokens/mo with likely repeated system prompts or context.`;
         const action = `Implement prompt caching for system prompts, instructions, or RAG context. OpenAI caches up to ${isGPT4OMini ? "5min" : "1hr"}. Potential 40-60% input cost reduction.`;
         const impact = `~${$(cacheSavings)}/mo (${P(cacheSavings, cur)}%) if 50% cacheable`;
@@ -353,7 +377,8 @@ export function findIssuesOpenAI(
           action,
           sev,
           conf,
-          impact
+          impact,
+          signals
         );
       }
     }
@@ -366,17 +391,16 @@ export function findIssuesOpenAI(
       ao < 200 &&
       r.reqs > 50
     ) {
-      const signals = [
-        { weight: 0.3, met: ao < 100 },
-        { weight: 0.25, met: r.reqs > 500 },
-        { weight: 0.2, met: ai < 3000 },
-        { weight: 0.15, met: ai < 2000 },
-        { weight: 0.1, met: r.activeDays > 20 },
+      const signals: FindingSignal[] = [
+        { weight: 0.3, met: ao < 100, label: "avg output < 100 tok" },
+        { weight: 0.25, met: r.reqs > 500, label: "500+ requests" },
+        { weight: 0.2, met: ai < 3000, label: "avg input < 3k tok" },
+        { weight: 0.15, met: ai < 2000, label: "avg input < 2k tok" },
+        { weight: 0.1, met: r.activeDays > 20, label: "20+ active days" },
       ];
       const conf = confidenceScore(signals);
       if (conf >= 0.4) {
-        const mini = prOpenAI("gpt-4o-mini");
-        const opt = (r.inp / 1e6) * mini.i + (r.out / 1e6) * mini.o;
+        const opt = costMiniDowngrade(costRow);
         const reason = `Avg output ${ao} tokens across ${r.reqs.toLocaleString()} reqs (avg input ${ai.toLocaleString()} tok). Pattern suggests classification/routing tasks.`;
         const action = `Switch to GPT-4o-mini. Run A/B test on 100 requests — if quality holds, migrate. Saves ~95%.`;
         const sev = conf >= 0.65 ? Severity.CRITICAL : Severity.WARNING;
@@ -386,25 +410,26 @@ export function findIssuesOpenAI(
           reason,
           action,
           sev,
-          conf
+          conf,
+          undefined,
+          signals
         );
       }
     }
 
     /* ─── RULE 2: RAG Context Bloat ─── */
     if (hasTokenData && ratio > 12 && !isGPT4OMini && r.inp > 10e6) {
-      const signals = [
-        { weight: 0.3, met: ratio > 20 },
-        { weight: 0.25, met: ai > 8000 },
-        { weight: 0.2, met: ao < 500 },
-        { weight: 0.15, met: r.reqs > 100 },
-        { weight: 0.1, met: true },
+      const signals: FindingSignal[] = [
+        { weight: 0.3, met: ratio > 20, label: "in:out ratio > 20:1" },
+        { weight: 0.25, met: ai > 8000, label: "avg input > 8k tok" },
+        { weight: 0.2, met: ao < 500, label: "avg output < 500 tok" },
+        { weight: 0.15, met: r.reqs > 100, label: "100+ requests" },
+        { weight: 0.1, met: true, label: "input-dominant workload" },
       ];
       const conf = confidenceScore(signals);
       if (conf >= 0.4) {
-        const reductionFactor = conf >= 0.7 ? 0.5 : 0.6;
-        const opt =
-          ((r.inp * reductionFactor) / 1e6) * p.i + (r.out / 1e6) * p.o;
+        const reductionFactor = ragReductionFactorOpenAI(conf);
+        const opt = costRagReductionOpenAI(costRow, conf);
         const reason = `Input:output ratio ${ratio.toFixed(0)}:1 (~${ai.toLocaleString()} tok/req input, ~${ao} output). ${(r.inp / 1e6).toFixed(1)}M input tokens/mo. RAG pulling too many chunks.`;
         const action = `Audit retrieval: reduce top-k, add reranking, tighten chunk size. Conservative: ${Math.round((1 - reductionFactor) * 100)}% input reduction.`;
         const sev = conf >= 0.65 ? Severity.CRITICAL : Severity.WARNING;
@@ -414,24 +439,25 @@ export function findIssuesOpenAI(
           reason,
           action,
           sev,
-          conf
+          conf,
+          undefined,
+          signals
         );
       }
     }
 
     /* ─── RULE 3: GPT-4o Overkill → GPT-4o-mini ─── */
     if (hasTokenData && isGPT4O && ao >= 200 && r.inp > 5e6) {
-      const signals = [
-        { weight: 0.3, met: ao < 1500 },
-        { weight: 0.25, met: r.reqs > 100 },
-        { weight: 0.2, met: ratio < 10 },
-        { weight: 0.15, met: ai < 10000 },
-        { weight: 0.1, met: r.activeDays > 15 },
+      const signals: FindingSignal[] = [
+        { weight: 0.3, met: ao < 1500, label: "avg output < 1.5k tok" },
+        { weight: 0.25, met: r.reqs > 100, label: "100+ requests" },
+        { weight: 0.2, met: ratio < 10, label: "in:out ratio < 10:1" },
+        { weight: 0.15, met: ai < 10000, label: "avg input < 10k tok" },
+        { weight: 0.1, met: r.activeDays > 15, label: "15+ active days" },
       ];
       const conf = confidenceScore(signals);
       if (conf >= 0.4) {
-        const mini = prOpenAI("gpt-4o-mini");
-        const opt = (r.inp / 1e6) * mini.i + (r.out / 1e6) * mini.o;
+        const opt = costMiniDowngrade(costRow);
         const reason = `GPT-4o with avg ${ao} tok output, ${r.reqs.toLocaleString()} reqs. Moderate complexity where GPT-4o-mini performs comparably.`;
         const action = `A/B test GPT-4o-mini on 10% traffic. If quality holds, migrate. Saves ~94%.`;
         const sev = conf >= 0.65 ? Severity.WARNING : Severity.INFO;
@@ -441,7 +467,9 @@ export function findIssuesOpenAI(
           reason,
           action,
           sev,
-          conf
+          conf,
+          undefined,
+          signals
         );
       }
     }
@@ -455,15 +483,15 @@ export function findIssuesOpenAI(
       const bursty = avgDaily > 100 && r.activeDays < 25;
 
       if (bursty) {
-        const signals = [
-          { weight: 0.35, met: avgDaily > 200 },
-          { weight: 0.25, met: r.reqs > 500 },
-          { weight: 0.2, met: !isGPT4OMini },
-          { weight: 0.2, met: r.activeDays < 25 },
+        const signals: FindingSignal[] = [
+          { weight: 0.35, met: avgDaily > 200, label: "200+ reqs/day" },
+          { weight: 0.25, met: r.reqs > 500, label: "500+ requests" },
+          { weight: 0.2, met: !isGPT4OMini, label: "higher-tier model" },
+          { weight: 0.2, met: r.activeDays < 25, label: "< 25 active days" },
         ];
         const conf = confidenceScore(signals);
         if (conf >= 0.4) {
-          const opt = cur * 0.5; // Batch API offers 50% discount
+          const opt = costBatchDiscountOpenAI(costRow); // 50% batch discount
           const reason = `Bursty traffic (~${Math.round(avgDaily)} reqs/day avg). ${r.reqs.toLocaleString()} total reqs — likely batch processing.`;
           const action = `Migrate to Batch API for 50% cost reduction. Processes within 24hrs.`;
           const sev = conf >= 0.65 ? Severity.WARNING : Severity.INFO;
@@ -473,7 +501,9 @@ export function findIssuesOpenAI(
             reason,
             action,
             sev,
-            conf
+            conf,
+            undefined,
+            signals
           );
         }
       }
@@ -489,15 +519,15 @@ export function findIssuesOpenAI(
       r.activeDays >= 20
     ) {
       const avgDaily = r.reqs / r.activeDays;
-      const signals = [
-        { weight: 0.4, met: cur > 80 },
-        { weight: 0.3, met: r.reqs > 5000 },
-        { weight: 0.2, met: !isGPT4OMini },
-        { weight: 0.1, met: avgDaily < 2000 },
+      const signals: FindingSignal[] = [
+        { weight: 0.4, met: cur > 80, label: "spend > $80/mo" },
+        { weight: 0.3, met: r.reqs > 5000, label: "5k+ requests" },
+        { weight: 0.2, met: !isGPT4OMini, label: "higher-tier model" },
+        { weight: 0.1, met: avgDaily < 2000, label: "steady daily volume" },
       ];
       const conf = confidenceScore(signals);
       if (conf >= 0.4) {
-        const opt = cur * 0.5;
+        const opt = costBatchDiscountOpenAI(costRow);
         const reason = `${r.reqs.toLocaleString()} requests/mo (~${Math.round(avgDaily)}/day, ${r.activeDays} active days). Steady high-volume pattern — Batch API gives 50% off for async workloads with 24hr turnaround.`;
         const action = `If any of these calls are latency-tolerant (evals, data processing, nightly jobs), migrate to Batch API. Zero code change required beyond switching endpoint to /v1/batches.`;
         const sev = conf >= 0.65 ? Severity.WARNING : Severity.INFO;
@@ -507,7 +537,9 @@ export function findIssuesOpenAI(
           reason,
           action,
           sev,
-          conf
+          conf,
+          undefined,
+          signals
         );
       }
     }
@@ -520,17 +552,16 @@ export function findIssuesOpenAI(
         r.model.toLowerCase().includes("o3")) &&
       r.reqs > 50
     ) {
-      const signals = [
-        { weight: 0.35, met: ao < 500 }, // Short outputs suggest simple tasks
-        { weight: 0.25, met: ai < 5000 }, // Short inputs suggest simple prompts
-        { weight: 0.2, met: r.reqs > 200 }, // High volume
-        { weight: 0.15, met: ratio < 8 }, // Not context-heavy
-        { weight: 0.05, met: cur > 10 }, // Significant spend
+      const signals: FindingSignal[] = [
+        { weight: 0.35, met: ao < 500, label: "avg output < 500 tok" },
+        { weight: 0.25, met: ai < 5000, label: "avg input < 5k tok" },
+        { weight: 0.2, met: r.reqs > 200, label: "200+ requests" },
+        { weight: 0.15, met: ratio < 8, label: "not context-heavy" },
+        { weight: 0.05, met: cur > 10, label: "spend > $10/mo" },
       ];
       const conf = confidenceScore(signals);
       if (conf >= 0.5) {
-        const gpt4o = prOpenAI("gpt-4o");
-        const opt = (r.inp / 1e6) * gpt4o.i + (r.out / 1e6) * gpt4o.o;
+        const opt = costGpt4oDowngrade(costRow);
         const reason = `Using ${r.model} for ${r.reqs.toLocaleString()} reqs with avg ${ao} tok output. O-series excels at complex reasoning, but pattern suggests simpler tasks.`;
         const action = `Test GPT-4o on representative sample. O-series adds 60-80% cost premium for reasoning - verify it's needed. Consider GPT-4o or 4o-mini.`;
         const sev = conf >= 0.7 ? Severity.WARNING : Severity.INFO;
@@ -540,7 +571,9 @@ export function findIssuesOpenAI(
           reason,
           action,
           sev,
-          conf
+          conf,
+          undefined,
+          signals
         );
       }
     }
@@ -554,7 +587,7 @@ export function findIssuesOpenAI(
       const reason = `This pattern represents ${P(cur, totalSpend)}% of total OpenAI spend (${$(cur)}/${$(totalSpend)}/mo). ${r.reqs.toLocaleString()} reqs, avg ${ai.toLocaleString()} in / ${ao} out tokens.`;
       const action = `High-impact optimization target. Review: (1) Model choice, (2) Prompt efficiency, (3) Request patterns. Even 10% reduction = ${$(cur * 0.1)}/mo.`;
       const sev = Severity.INFO;
-      const opt = cur * 0.9; // Assume 10% optimization potential
+      const opt = costTenPercentTrim(costRow); // Assume 10% optimization potential
       addFinding(
         OpenAICategory.HIGH_IMPACT_OPPORTUNITY,
         opt,
@@ -568,18 +601,17 @@ export function findIssuesOpenAI(
     /* ─── RULE 8: Token Efficiency - Prompt Bloat ─── */
     // Detect unnecessarily verbose prompts or inefficient formatting
     if (hasTokenData && ai > 8000 && r.reqs > 100 && cur > 3) {
-      const signals = [
-        { weight: 0.3, met: ai > 12000 }, // Very large inputs
-        { weight: 0.25, met: ao < ai * 0.05 }, // Output is tiny compared to input
-        { weight: 0.2, met: r.reqs > 500 }, // High volume amplifies waste
-        { weight: 0.15, met: ratio > 15 }, // Extreme input/output ratio
-        { weight: 0.1, met: true },
+      const signals: FindingSignal[] = [
+        { weight: 0.3, met: ai > 12000, label: "avg input > 12k tok" },
+        { weight: 0.25, met: ao < ai * 0.05, label: "output < 5% of input" },
+        { weight: 0.2, met: r.reqs > 500, label: "500+ requests" },
+        { weight: 0.15, met: ratio > 15, label: "in:out ratio > 15:1" },
+        { weight: 0.1, met: true, label: "verbose prompt pattern" },
       ];
       const conf = confidenceScore(signals);
       if (conf >= 0.5) {
         // Estimate 25% token reduction through optimization
-        const optimizedInput = r.inp * 0.75;
-        const opt = (optimizedInput / 1e6) * p.i + (r.out / 1e6) * p.o;
+        const opt = costPromptTrim(costRow);
         const reason = `Avg ${ai.toLocaleString()} input tokens/req producing ${ao} output tokens. ${(r.inp / 1e6).toFixed(1)}M input tokens/mo. Suggests verbose prompts, redundant context, or inefficient formatting.`;
         const action = `Audit prompts: (1) Remove instructional bloat, (2) Use structured outputs, (3) Compress examples, (4) Trim RAG context. Target 25% reduction = ${$(cur - opt)}/mo.`;
         const sev = conf >= 0.7 ? Severity.WARNING : Severity.INFO;
@@ -589,7 +621,9 @@ export function findIssuesOpenAI(
           reason,
           action,
           sev,
-          conf
+          conf,
+          undefined,
+          signals
         );
       }
     }
@@ -597,17 +631,16 @@ export function findIssuesOpenAI(
     /* ─── RULE 7: GPT-4 Legacy → GPT-4o Upgrade ─── */
     // Detect old GPT-4 models that should upgrade to GPT-4o
     if (hasTokenData && isGPT4 && r.reqs > 50 && cur > 2) {
-      const signals = [
-        { weight: 0.3, met: r.reqs > 100 },
-        { weight: 0.25, met: cur > 5 },
-        { weight: 0.2, met: r.activeDays > 3 },
-        { weight: 0.15, met: true }, // Always recommend upgrading from legacy GPT-4
-        { weight: 0.1, met: ao < 500 },
+      const signals: FindingSignal[] = [
+        { weight: 0.3, met: r.reqs > 100, label: "100+ requests" },
+        { weight: 0.25, met: cur > 5, label: "spend > $5/mo" },
+        { weight: 0.2, met: r.activeDays > 3, label: "3+ active days" },
+        { weight: 0.15, met: true, label: "legacy GPT-4 in use" },
+        { weight: 0.1, met: ao < 500, label: "avg output < 500 tok" },
       ];
       const conf = confidenceScore(signals);
       if (conf >= 0.4) {
-        const gpt4o = prOpenAI("gpt-4o");
-        const opt = (r.inp / 1e6) * gpt4o.i + (r.out / 1e6) * gpt4o.o;
+        const opt = costLegacyGpt4Upgrade(costRow);
         const reason = `Using legacy ${r.model} (${r.reqs.toLocaleString()} reqs, avg ${ao} tok output). GPT-4o offers better performance at similar or lower cost.`;
         const action = `Upgrade to GPT-4o (gpt-4o-2024-08-06). Drop-in replacement with better reasoning, faster speed, and lower cost. Test on staging first.`;
         const sev = Severity.INFO;
@@ -617,7 +650,9 @@ export function findIssuesOpenAI(
           reason,
           action,
           sev,
-          conf
+          conf,
+          undefined,
+          signals
         );
       }
     }
@@ -625,16 +660,10 @@ export function findIssuesOpenAI(
     /* ─── RULE 9: Legacy Model ─── */
     if (p.g > 0 && p.g < 4 && cur > 2) {
       // Suggest upgrading to newer models
-      const newer = isO1
-        ? prOpenAI("o3")
-        : isGPT4
-          ? prOpenAI("gpt-4o")
-          : prOpenAI("gpt-4o-mini");
-      const newerCost = (r.inp / 1e6) * newer.i + (r.out / 1e6) * newer.o;
-      const savOrCost = cur - newerCost;
+      const newer = upgradeTargetOpenAI(costRow.model);
+      const opt = costModelUpgradeOpenAI(costRow);
       const conf = 0.8;
-      const opt = Math.min(cur, newerCost);
-      const reason = `Running ${p.l} (gen ${p.g}). ${newer.l} offers better performance${savOrCost > 0 ? " at lower cost" : ""}.`;
+      const reason = `Running ${p.l} (gen ${p.g}). ${newer.l} offers better performance${opt < cur ? " at lower cost" : ""}.`;
       const action = `Update model to ${newer.l.toLowerCase().replace(/ /g, "-")}. Test on staging first.`;
       const sev = Severity.INFO;
       addFinding(OpenAICategory.MODEL_UPGRADE, opt, reason, action, sev, conf);
@@ -692,6 +721,7 @@ export function findIssuesOpenAI(
         batchCandidate: false,
         meanDaily: 0,
       },
+      source: "rules",
     });
   }
 
@@ -736,6 +766,7 @@ export function findIssuesOpenAI(
         batchCandidate: false,
         meanDaily: 0,
       },
+      source: "rules",
     });
   }
 

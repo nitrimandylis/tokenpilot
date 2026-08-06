@@ -172,9 +172,10 @@ function HomeContent() {
   const [step, setStep] = useState("");
   const [tickerItems, setTickerItems] = useState(DEFAULT_TICKER);
 
-  // NVIDIA NIM LLM analysis: a persisted on/off setting. The key lives in a
-  // server env var (NIM_API_KEY); the toggle only shows when the server reports
-  // NIM is configured.
+  // NVIDIA NIM AI augmentation: a persisted on/off setting. When on, the rule
+  // engine still runs and an LLM augments it (consensus merge) — it never
+  // replaces the rules. The key lives in a server env var (NIM_API_KEY); the
+  // toggle only shows when the server reports NIM is configured.
   const [nimAvailable, setNimAvailable] = useState(false);
   const [useNim, setUseNim] = useState(false);
 
@@ -257,9 +258,10 @@ function HomeContent() {
     router.push(`/?${params.toString()}`);
   };
 
-  // Choose NIM-guided LLM analysis when the setting is on, else the rule engine.
-  // A NIM failure falls back to the deterministic rules and stamps a notice on
-  // the report instead of erroring out. Used by both the real analysis and the demo.
+  // When AI augmentation is on, run BOTH engines: rules first, then the LLM,
+  // merged with per-finding provenance (engine "hybrid"). A NIM failure
+  // degrades to the rules-only findings with a notice — the report is never
+  // empty. Used by both the real analysis and the demo.
   const nimOn = () => useNim && nimAvailable;
 
   const analyzeAnthropic = async (
@@ -269,7 +271,7 @@ function HomeContent() {
     spend: number
   ): Promise<AnalysisOutcome> => {
     if (nimOn()) {
-      setStep("Analyzing usage with NVIDIA NIM...");
+      setStep("Augmenting rule analysis with NVIDIA NIM...");
       return analyzeWithFallback(
         () =>
           findIssuesLLM(toSummariesAnthropic(src, ws, buckets), {
@@ -289,7 +291,7 @@ function HomeContent() {
     spend: number
   ): Promise<AnalysisOutcome> => {
     if (nimOn()) {
-      setStep("Analyzing usage with NVIDIA NIM...");
+      setStep("Augmenting rule analysis with NVIDIA NIM...");
       return analyzeWithFallback(
         () =>
           findIssuesLLM(toSummariesOpenAI(rows, projects), {
@@ -875,7 +877,7 @@ function HomeContent() {
                     : "Console → API Keys → Admin Keys → Create admin key (read-only)"}
                 </p>
 
-                {/* AI analysis setting — only shown when NIM is configured server-side */}
+                {/* AI augmentation setting — only shown when NIM is configured server-side */}
                 {nimAvailable && (
                   <label
                     htmlFor="nim-toggle"
@@ -890,8 +892,8 @@ function HomeContent() {
                     />
                     <span className="text-[11px] text-bone-subtle font-mono">
                       {useNim
-                        ? "✓ AI analysis on — an NVIDIA NIM model reasons over your usage instead of fixed rules."
-                        : "Use AI analysis (NVIDIA NIM) instead of the built-in rule engine."}
+                        ? "✓ AI augmentation on — an NVIDIA NIM model double-checks the rule engine and spots extra findings, priced from your data."
+                        : "Add AI augmentation (NVIDIA NIM) on top of the built-in rule engine."}
                     </span>
                   </label>
                 )}

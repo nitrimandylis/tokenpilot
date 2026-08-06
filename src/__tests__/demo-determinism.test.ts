@@ -106,4 +106,31 @@ describe("demo mode determinism", () => {
     const b = demoAnthropic(BASE_YEAR, BASE_MONTH, DEMO_SEED + 1);
     expect(JSON.stringify(a.bm)).not.toBe(JSON.stringify(b.bm));
   });
+
+  it("the demo org has 8 workspaces plus busy default-workspace traffic", () => {
+    const d = demoAnthropic(BASE_YEAR, BASE_MONTH, DEMO_SEED);
+    expect(d.ws).toHaveLength(8);
+    // Some traffic deliberately carries no workspace_id → default workspace.
+    expect(d.bw.some((b) => !b.workspace_id)).toBe(true);
+    expect(d.bw.some((b) => b.workspace_id === "ws_prod")).toBe(true);
+  });
+
+  it("the demo's varied workloads fire most rule categories", () => {
+    const cats = new Set(
+      runAnthropicDemo().flatMap((r) => r.findings.map((f) => f.cat as string))
+    );
+    for (const expected of [
+      "Model Downgrade → Haiku",
+      "Model Downgrade → Sonnet",
+      "RAG Optimization",
+      "Prompt Caching",
+      "Batch API Migration",
+      "Model Upgrade",
+      "Workspace Organization",
+    ]) {
+      expect(cats, `expected category "${expected}" to fire`).toContain(
+        expected
+      );
+    }
+  });
 });

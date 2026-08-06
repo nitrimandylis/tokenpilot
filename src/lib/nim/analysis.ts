@@ -1,12 +1,13 @@
 /* ═══════════════════ NVIDIA NIM — LLM-GUIDED ANALYSIS ═══════════════════ */
 /*
- * Drop-in alternative to the hardcoded rule engines (findIssues /
- * findIssuesOpenAI). Instead of fixed thresholds, we hand a structured usage
- * summary to an LLM hosted on NVIDIA NIM and let it reason about which
- * optimizations apply. The rules below are *guidance* for the model, not code.
+ * AI augmentation layer over the deterministic rule engines (findIssues /
+ * findIssuesOpenAI). The LLM's job is detection and explanation ONLY: it
+ * proposes {row, category, severity, confidence, reason, action}. Every
+ * dollar figure is computed here from the row's real metrics via the vendor
+ * costing modules — the model never emits a savings number.
  *
- * The deterministic metrics (cost, savings clamping, ids) are still computed
- * here so dollar figures stay grounded and the model can't hallucinate numbers.
+ * When the AI toggle is on, BOTH engines run and their findings merge with
+ * per-finding provenance (source: "rules" | "llm" | "both").
  */
 
 import type {
@@ -15,7 +16,9 @@ import type {
   LlmUsage,
   TemporalPattern,
 } from "@/types";
-import { Severity } from "@/types/analysis";
+import { AnthropicCategory, OpenAICategory, Severity } from "@/types/analysis";
+import { optimizedCostAnthropic } from "@/lib/anthropic/costing";
+import { optimizedCostOpenAI } from "@/lib/openai/costing";
 
 /** Default NIM-hosted model. OpenAI-compatible chat completions. */
 export const NIM_DEFAULT_MODEL = "meta/llama-3.3-70b-instruct";
@@ -69,18 +72,53 @@ export const ANALYSIS_RULES = `
    Action: split by environment/team/product for cost attribution. (Quality/visibility
    win, savings = 0.)
 
-Only emit a finding when the data actually supports it. Be conservative with
-savings — prefer underestimating. Skip rows costing under ~$0.50/mo.
+Only emit a finding when the data actually supports it. Skip rows costing under
+~$0.50/mo.
 `.trim();
+
+/**
+ * Category values the LLM may emit per vendor. Only categories the costing
+ * module can price (plus the zero-savings org/quality ones) are offered.
+ */
+export function validCategories(vendor: "anthropic" | "openai"): string[] {
+  if (vendor === "openai") {
+    return [
+      OpenAICategory.MODEL_DOWNGRADE_MINI,
+      OpenAICategory.MODEL_DOWNGRADE_4O,
+      OpenAICategory.RAG_OPTIMIZATION,
+      OpenAICategory.PROMPT_CACHING,
+      OpenAICategory.PROMPT_OPTIMIZATION,
+      OpenAICategory.BATCH_API_MIGRATION,
+      OpenAICategory.MODEL_UPGRADE,
+      OpenAICategory.REASONING_MODEL_OVERKILL,
+      OpenAICategory.HIGH_IMPACT_OPPORTUNITY,
+      OpenAICategory.PROJECT_ORGANIZATION,
+    ];
+  }
+  return [
+    AnthropicCategory.MODEL_DOWNGRADE_HAIKU,
+    AnthropicCategory.MODEL_DOWNGRADE_SONNET,
+    AnthropicCategory.RAG_OPTIMIZATION,
+    AnthropicCategory.PROMPT_CACHING,
+    AnthropicCategory.BATCH_API_MIGRATION,
+    AnthropicCategory.MODEL_UPGRADE,
+    AnthropicCategory.WORKSPACE_ORGANIZATION,
+  ];
+}
 
 export function buildSystemPrompt(vendor: "anthropic" | "openai"): string {
   const small = vendor === "openai" ? "gpt-4o-mini" : "claude-haiku-4-5";
   const mid = vendor === "openai" ? "gpt-4o" : "claude-sonnet-4-6";
+  const categories = validCategories(vendor)
+    .map((c) => `"${c}"`)
+    .join(", ");
   return `You are TokenPilot's LLM cost-optimization analyst for ${vendor === "openai" ? "OpenAI" : "Anthropic"} API usage.
 
 You receive a JSON array of per-row usage summaries (one row = a model used by an
 API key inside a workspace/project) plus org-level context. Apply the rules below
-and return concrete, actionable cost-savings findings.
+and propose concrete, actionable findings. You DETECT and EXPLAIN only — all
+dollar amounts are computed separately from the row's real usage data, so do not
+mention specific dollar savings.
 
 ANALYSIS RULES:
 ${ANALYSIS_RULES}
@@ -92,27 +130,29 @@ Respond with ONLY a JSON object, no prose, of the form:
   "findings": [
     {
       "rowId": "<the id field from the input row this applies to, or \\"org\\" for org-wide structure findings>",
-      "category": "short label, e.g. 'Model Downgrade → Haiku', 'RAG Optimization', 'Prompt Caching', 'Batch API Migration', 'Model Upgrade', 'Workspace Organization'",
+      "category": "one of the exact values listed below",
       "severity": "critical | warning | info",
       "confidence": 0.0,
-      "savingsMonthly": 0.0,
       "reason": "1-3 sentences. Cite ONLY the actual values from THIS row.",
       "action": "concrete next step the engineer can take."
     }
   ]
 }
 
+VALID CATEGORY VALUES (use exactly one of these strings, verbatim):
+${categories}
+
 GROUNDING (critical): In "reason", quote only the real numbers from the row you are
 analyzing — its monthlyCostUsd, inputTokens, cacheReadRate, avgOutputPerReq, requests,
 and its own model id. NEVER repeat the threshold numbers written in the rules above
 (e.g. ">20M tok/mo", "<5%", ">5000 tok/req") — those are triggers, not this row's data.
 NEVER mention another row's model or numbers. If a row's real numbers don't clear a
-rule's threshold, do not emit that finding for it.
+rule's threshold, do not emit that finding for it. Do NOT state dollar amounts —
+savings are priced deterministically from the row's data after you respond.
 
-Severity guide: critical = >$100/mo or >20% of this row's cost; warning = meaningful
-savings; info = small or quality-only. savingsMonthly is the estimated monthly USD
-saved (0 for quality-only or org-structure findings) and must not exceed the row's
-current monthly cost. confidence is 0-1. Emit at most one finding per category per row.`;
+Severity guide: critical = large or urgent waste on this row; warning = meaningful
+optimization; info = small or quality-only. confidence is 0-1. Emit at most one
+finding per category per row.`;
 }
 
 /* ─────────────── INPUT SUMMARY (vendor-agnostic) ─────────────── */
@@ -147,12 +187,12 @@ const EMPTY_TEMPORAL: TemporalPattern = {
   meanDaily: 0,
 };
 
-interface LlmFinding {
+/** What the LLM returns per proposal — note: no savings field of any kind. */
+export interface LlmProposal {
   rowId: string;
   category: string;
   severity: string;
   confidence: number;
-  savingsMonthly: number;
   reason: string;
   action: string;
 }
@@ -205,6 +245,12 @@ function toSeverity(s: string): Severity {
   }
 }
 
+const slug = (c: string) => c.replace(/[^a-z0-9]/gi, "-").toLowerCase();
+
+// Looser form for matching LLM-emitted category strings: consecutive
+// separators collapse so "→" and "->" normalize identically.
+const canon = (c: string) => slug(c).replace(/-+/g, "-");
+
 // Cost tier rank from a model id/label — lower = cheaper. Heuristic, but enough
 // to catch the LLM mislabelling an upgrade as a "downgrade". ponytail: extend
 // the regexes if a new tier shows up.
@@ -224,67 +270,123 @@ function downgradeTargetRank(category: string): number | null {
   return tierRank(target);
 }
 
+// Categories where a zero-savings finding is still worth surfacing (quality
+// or organizational wins), matching the rule engines' behavior.
 const KEEP_ZERO_SAVINGS = /upgrade|organization|workspace|project|quality/i;
 
 interface Candidate {
   finding: Finding;
   rowId: string;
-  cur: number;
   sav: number;
   conf: number;
   isDowngrade: boolean;
 }
 
 /**
- * Merge the LLM's reasoning back onto deterministic per-row metrics, then apply
- * guardrails so a weak model can't produce contradictory or impossible advice:
- *   1. Per-finding savings clamped to [0, row cost].
- *   2. Drop "downgrades" whose target isn't actually cheaper than the row's model.
- *   3. Keep only the single best downgrade per row (no Sonnet AND Haiku at once).
- *   4. Drop zero-savings cost findings (noise); keep zero-savings quality/org ones.
- *   5. Cap cumulative savings per row at the row's spend (no >100% savings).
+ * Resolve an LLM-emitted category string to the vendor's canonical enum value.
+ * Tolerates "->" vs "→" and case drift; returns null for anything not in the
+ * fixed category set.
+ */
+export function resolveCategory(
+  vendor: "anthropic" | "openai",
+  category: string
+): AnthropicCategory | OpenAICategory | null {
+  const want = canon(category || "");
+  for (const c of validCategories(vendor)) {
+    if (canon(c) === want) return c as AnthropicCategory | OpenAICategory;
+  }
+  return null;
+}
+
+/**
+ * Price the LLM's proposals deterministically and turn them into Findings.
+ * The LLM contributes detection + explanation; the costing module contributes
+ * every number. Guardrails:
+ *   1. Categories outside the vendor's fixed enum are dropped.
+ *   2. "Downgrades" whose target isn't actually cheaper than the row's model
+ *      are dropped (tier sanity).
+ *   3. At most one downgrade per row (no Sonnet AND Haiku at once).
+ *   4. Proposals whose category can't be costed for that row are dropped —
+ *      except zero-savings org/quality categories, which keep savings 0.
  * Exported for testing.
  */
-export function mergeLlmFindings(
-  llm: LlmFinding[],
+export function priceLlmFindings(
+  llm: LlmProposal[],
   rows: UsageSummary[],
   ctx: AnalysisContext
 ): Finding[] {
   const byId = new Map(rows.map((r) => [r.id, r]));
   const candidates: Candidate[] = [];
+  const seen = new Set<string>();
 
   for (const f of llm || []) {
     if (!f || !f.reason) continue;
+    const cat = resolveCategory(ctx.vendor, f.category);
+    if (!cat) continue; // guardrail 1: unknown category
+
+    const dedupeKey = `${f.rowId}|${slug(cat)}`;
+    if (seen.has(dedupeKey)) continue;
+
     const r = byId.get(f.rowId);
     const cur = r ? r.cur : ctx.totalSpend;
-    const sav = Math.max(0, Math.min(f.savingsMonthly || 0, cur));
     const conf = Math.max(0, Math.min(f.confidence ?? 0.5, 1));
-    const category = f.category || "Optimization";
 
     // Guardrail 2: a "downgrade" to an equal/pricier tier isn't a saving.
-    const targetRank = downgradeTargetRank(category);
+    const targetRank = downgradeTargetRank(cat);
     const isDowngrade = targetRank !== null;
     if (r && isDowngrade && targetRank! >= tierRank(r.model || r.ml)) continue;
 
-    // Guardrail 4: drop zero-savings cost findings; keep quality/org ones.
-    if (sav <= 0 && !KEEP_ZERO_SAVINGS.test(category)) continue;
+    // Deterministic pricing — the only source of dollar figures.
+    const priced = r
+      ? ctx.vendor === "openai"
+        ? optimizedCostOpenAI(cat as OpenAICategory, {
+            model: r.model || r.ml || "",
+            inp: r.inp,
+            out: r.out,
+            cur,
+            conf,
+          })
+        : optimizedCostAnthropic(cat as AnthropicCategory, {
+            model: r.model,
+            inp: r.inp,
+            out: r.out,
+            cached: r.cached,
+            cacheCreated: r.cacheCreated,
+            cur,
+            conf,
+          })
+      : null;
 
+    let sav: number;
+    let opt: number;
+    if (priced === null) {
+      // Guardrail 4: uncostable — only org/quality categories survive, at $0.
+      if (!KEEP_ZERO_SAVINGS.test(cat)) continue;
+      sav = 0;
+      opt = cur;
+    } else {
+      sav = Math.max(0, cur - priced);
+      opt = cur - sav;
+      // A cost finding the pricing says saves nothing is noise.
+      if (sav <= 0 && !KEEP_ZERO_SAVINGS.test(cat)) continue;
+    }
+
+    seen.add(dedupeKey);
     const ratio = r && r.out > 0 ? r.inp / r.out : 0;
     const cr = r && r.inp + r.cached > 0 ? r.cached / (r.inp + r.cached) : 0;
-    const slug = category.replace(/[^a-z0-9]/gi, "-").toLowerCase();
+    const pct = cur > 0 ? Math.round((sav / cur) * 100) : 0;
 
     candidates.push({
       rowId: f.rowId,
-      cur,
       sav,
       conf,
       isDowngrade,
       finding: {
-        id: `${f.rowId}-${slug}`,
+        id: `${f.rowId}-${slug(cat)}`,
         name: r ? r.name : "Organization",
         ws: r ? r.ws : "All workspaces",
         model: r ? r.model : "N/A",
-        ml: r ? r.ml : category,
+        ml: r ? r.ml : cat,
         inp: r?.inp ?? 0,
         out: r?.out ?? 0,
         cached: r?.cached ?? 0,
@@ -294,16 +396,18 @@ export function mergeLlmFindings(
         ratio,
         cr,
         cur,
-        opt: cur, // filled after capping
-        sav, // filled after capping
+        opt,
+        sav,
         reason: f.reason,
         action: f.action || "",
         sev: toSeverity(f.severity),
-        cat: category as Finding["cat"],
+        cat,
         conf,
-        impact: "",
+        impact:
+          sav > 0 ? `$${sav.toFixed(2)}/mo (${pct}%)` : "Quality improvement",
         activeDays: r?.activeDays ?? 0,
         temporal: r?.temporal ?? EMPTY_TEMPORAL,
+        source: "llm",
       },
     });
   }
@@ -321,41 +425,73 @@ export function mergeLlmFindings(
     (c) => !c.isDowngrade || bestDowngrade.get(c.rowId) === c
   );
 
-  // Guardrail 5: cap cumulative savings per row at its spend (highest first).
-  const headroom = new Map<string, number>();
-  for (const c of [...kept].sort((a, b) => b.sav - a.sav)) {
-    const left = headroom.get(c.rowId) ?? c.cur;
-    const sav = Math.min(c.sav, Math.max(0, left));
-    headroom.set(c.rowId, left - sav);
-    c.finding.sav = sav;
-    c.finding.opt = Math.max(0, c.cur - sav);
-    const pct = c.cur > 0 ? Math.round((sav / c.cur) * 100) : 0;
-    c.finding.impact =
-      sav > 0 ? `$${sav.toFixed(2)}/mo (${pct}%)` : "Quality improvement";
+  return kept.map((c) => c.finding).sort(bySeverityThenSavings);
+}
+
+/* ─────────────── CONSENSUS MERGE ─────────────── */
+
+const sv: Record<Severity, number> = {
+  [Severity.CRITICAL]: 0,
+  [Severity.WARNING]: 1,
+  [Severity.INFO]: 2,
+  [Severity.OK]: 3,
+};
+
+function bySeverityThenSavings(a: Finding, b: Finding): number {
+  return sv[a.sev] !== sv[b.sev] ? sv[a.sev] - sv[b.sev] : b.sav - a.sav;
+}
+
+// A finding's merge key: the row it belongs to plus its category. Rule and LLM
+// finding ids share the shape `${rowId}-${categorySlug}`, so stripping the
+// category slug recovers the row id. Org-level findings (workspace/project
+// organization) collapse to a shared "org" row so both engines' versions of
+// the same structural insight merge into one.
+export function consensusKey(f: Finding): string {
+  const catSlug = slug(f.cat as string);
+  if (/organization/i.test(f.cat as string)) return `org|${catSlug}`;
+  const suffix = `-${catSlug}`;
+  const rowId = f.id.endsWith(suffix) ? f.id.slice(0, -suffix.length) : f.id;
+  return `${rowId}|${catSlug}`;
+}
+
+/**
+ * Merge both engines' findings by (row, category):
+ *  - found by both  → one finding, rule's text kept, source "both",
+ *                     confidence = min(0.95, max(ruleConf, llmConf) + 0.1)
+ *  - rules only     → unchanged, source "rules"
+ *  - LLM only       → LLM's text, deterministic price, source "llm"
+ */
+export function mergeConsensus(
+  ruleFindings: Finding[],
+  llmFindings: Finding[]
+): Finding[] {
+  const llmByKey = new Map(llmFindings.map((f) => [consensusKey(f), f]));
+  const merged: Finding[] = [];
+
+  for (const rf of ruleFindings) {
+    const key = consensusKey(rf);
+    const lf = llmByKey.get(key);
+    if (lf) {
+      llmByKey.delete(key);
+      merged.push({
+        ...rf,
+        source: "both",
+        conf: Math.min(0.95, Math.max(rf.conf, lf.conf) + 0.1),
+      });
+    } else {
+      merged.push({ ...rf, source: rf.source ?? "rules" });
+    }
   }
 
-  // Guardrail 4 (final pass): a cost finding the cumulative cap zeroed out is
-  // noise, not a "quality improvement" — drop it. Quality/org findings stay.
-  const final = kept.filter(
-    (c) => c.finding.sav > 0 || KEEP_ZERO_SAVINGS.test(c.finding.cat as string)
-  );
+  for (const lf of llmByKey.values()) {
+    merged.push({ ...lf, source: "llm" });
+  }
 
-  // Same severity+savings ordering the hardcoded engine uses.
-  const sv: Record<Severity, number> = {
-    [Severity.CRITICAL]: 0,
-    [Severity.WARNING]: 1,
-    [Severity.INFO]: 2,
-    [Severity.OK]: 3,
-  };
-  return final
-    .map((c) => c.finding)
-    .sort((a, b) =>
-      sv[a.sev] !== sv[b.sev] ? sv[a.sev] - sv[b.sev] : b.sav - a.sav
-    );
+  return merged.sort(bySeverityThenSavings);
 }
 
 /** Extract a JSON object even if the model wraps it in prose / code fences. */
-function parseFindings(content: string): LlmFinding[] {
+function parseFindings(content: string): LlmProposal[] {
   let txt = content.trim();
   const fence = txt.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (fence) txt = fence[1].trim();
@@ -383,27 +519,39 @@ export const LLM_FALLBACK_NOTICE =
   "LLM unavailable, showing deterministic analysis";
 
 /**
- * Run the LLM analysis; on any failure fall back to the deterministic rule
- * engine and surface a notice so the report says which engine actually ran.
+ * Consensus run: the rule engine always runs first (synchronously), then the
+ * LLM augments it. On success the two merge with per-finding provenance
+ * (engine "hybrid"); on any LLM failure the report degrades to the rules-only
+ * findings with a notice — it is never empty, because the rules already ran.
  */
 export async function analyzeWithFallback(
   llm: () => Promise<LlmAnalysisResult>,
   rules: () => Finding[]
 ): Promise<AnalysisOutcome> {
+  const ruleFindings = rules();
   try {
     const res = await llm();
-    return { findings: res.findings, engine: "llm", llmUsage: res.usage };
+    return {
+      findings: mergeConsensus(ruleFindings, res.findings),
+      engine: "hybrid",
+      llmUsage: res.usage,
+    };
   } catch (e) {
-    console.warn("LLM analysis failed, falling back to rule engine:", e);
-    return { findings: rules(), engine: "rules", notice: LLM_FALLBACK_NOTICE };
+    console.warn("LLM augmentation failed, showing rule-engine findings:", e);
+    return {
+      findings: ruleFindings,
+      engine: "rules",
+      notice: LLM_FALLBACK_NOTICE,
+    };
   }
 }
 
 /**
- * Run LLM-guided analysis via NVIDIA NIM. Returns Findings in the same shape as
- * the hardcoded engines, plus the NIM call's own token usage when the response
- * reports it. Throws on transport/parse failure so callers can fall back to
- * the rule engine (see analyzeWithFallback).
+ * Run LLM-guided detection via NVIDIA NIM and price each proposal with the
+ * vendor costing module. Returns Findings in the same shape as the rule
+ * engines (source "llm"), plus the NIM call's own token usage when the
+ * response reports it. Throws on transport/parse failure so callers can
+ * degrade to rules-only (see analyzeWithFallback).
  */
 export async function findIssuesLLM(
   rows: UsageSummary[],
@@ -473,7 +621,7 @@ export async function findIssuesLLM(
       : undefined;
 
   return {
-    findings: mergeLlmFindings(parseFindings(content), rows, ctx),
+    findings: priceLlmFindings(parseFindings(content), rows, ctx),
     usage,
   };
 }

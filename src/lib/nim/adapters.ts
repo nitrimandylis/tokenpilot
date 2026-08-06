@@ -50,7 +50,9 @@ export function toSummariesOpenAI(
     const p = prOpenAI(r.model || r.line_item || "");
     const cur = r.cost > 0 ? r.cost : tcOpenAI(r.model, r.inp, r.out);
     return {
-      id: `${r.project_id || "default"}-${r.model || r.line_item || "?"}`,
+      // Mirrors findIssuesOpenAI's finding-id prefix so consensus merging can
+      // match rule and LLM findings on the same row.
+      id: `${r.model || r.line_item || "unknown"}-${r.project_id || "x"}`,
       name: r.model || r.line_item || "?",
       ws: r.project_id ? pn[r.project_id] || r.project_id : "Default project",
       model: r.model || r.line_item || "?",

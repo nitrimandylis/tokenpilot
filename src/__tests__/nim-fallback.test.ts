@@ -4,7 +4,7 @@ import type { Finding } from "@/types";
 import { Severity, AnthropicCategory } from "@/types/analysis";
 
 const ruleFinding: Finding = {
-  id: "key1-ws1-caching",
+  id: "key1-ws1-prompt-caching",
   name: "key1",
   ws: "production",
   model: "claude-opus-4-6",
@@ -33,10 +33,22 @@ const ruleFinding: Finding = {
     batchCandidate: false,
     meanDaily: 300_000,
   },
+  source: "rules",
 };
 
-describe("analyzeWithFallback", () => {
-  it("falls back to the rule engine and sets the notice when the LLM throws", async () => {
+const llmFinding: Finding = {
+  ...ruleFinding,
+  id: "key1-ws1-batch-api-migration",
+  cat: AnthropicCategory.BATCH_API_MIGRATION,
+  sav: 100,
+  opt: 100,
+  reason: "bursty traffic",
+  action: "move to batch",
+  source: "llm",
+};
+
+describe("analyzeWithFallback (consensus)", () => {
+  it("degrades to rules-only findings with the notice when the LLM throws", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
     let rulesRan = false;
 
@@ -56,7 +68,7 @@ describe("analyzeWithFallback", () => {
     vi.restoreAllMocks();
   });
 
-  it("returns the LLM findings and usage with engine 'llm' on success", async () => {
+  it("runs BOTH engines and merges with engine 'hybrid' on success", async () => {
     const usage = {
       promptTokens: 4000,
       completionTokens: 800,
@@ -65,17 +77,38 @@ describe("analyzeWithFallback", () => {
     let rulesRan = false;
 
     const out = await analyzeWithFallback(
-      async () => ({ findings: [ruleFinding], usage }),
+      async () => ({ findings: [llmFinding], usage }),
       () => {
         rulesRan = true;
-        return [];
+        return [ruleFinding];
       }
     );
 
-    expect(rulesRan).toBe(false);
-    expect(out.findings).toEqual([ruleFinding]);
-    expect(out.engine).toBe("llm");
+    // Rules always run, even when the LLM succeeds.
+    expect(rulesRan).toBe(true);
+    expect(out.engine).toBe("hybrid");
     expect(out.notice).toBeUndefined();
     expect(out.llmUsage).toEqual(usage);
+    expect(out.findings).toHaveLength(2);
+    expect(out.findings.map((f) => f.source).sort()).toEqual(["llm", "rules"]);
+  });
+
+  it("marks a finding both engines agree on as source 'both' with boosted confidence", async () => {
+    const llmDuplicate: Finding = {
+      ...ruleFinding,
+      reason: "llm version",
+      conf: 0.6,
+      source: "llm",
+    };
+
+    const out = await analyzeWithFallback(
+      async () => ({ findings: [llmDuplicate] }),
+      () => [ruleFinding]
+    );
+
+    expect(out.findings).toHaveLength(1);
+    expect(out.findings[0].source).toBe("both");
+    expect(out.findings[0].reason).toBe(ruleFinding.reason);
+    expect(out.findings[0].conf).toBeCloseTo(0.9); // max(0.8, 0.6) + 0.1
   });
 });

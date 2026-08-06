@@ -66,41 +66,180 @@ function newProfile(seed: number): BusinessProfile {
 }
 
 // ─── Anthropic ───────────────────────────────────────────────────────────────
+//
+// 8 workspaces plus an overloaded default. Each workspace runs a distinct,
+// realistic workload pattern so most rule categories fire in a demo run:
+// caching miss, Haiku downgrade, RAG bloat, batch candidate, Opus→Sonnet,
+// legacy model, cache-write waste, plus a quiet staging workspace. Traffic
+// with no workspace_id lands in the (biggest-spending) default workspace,
+// which also triggers the org-structure finding.
 
 const ANTH_WORKSPACES: Workspace[] = [
+  { id: "ws_prod", name: "Production API", display_name: "Production API" },
   {
-    id: "ws_prod",
-    name: "Production",
-    display_name: "Production",
-    created_at: "2024-01-01T00:00:00Z",
+    id: "ws_support",
+    name: "Support Chatbot",
+    display_name: "Support Chatbot",
   },
   {
-    id: "ws_dev",
-    name: "Development",
-    display_name: "Development",
-    created_at: "2024-03-01T00:00:00Z",
+    id: "ws_rag",
+    name: "Knowledge Base RAG",
+    display_name: "Knowledge Base RAG",
   },
-];
+  { id: "ws_evals", name: "Nightly Evals", display_name: "Nightly Evals" },
+  {
+    id: "ws_research",
+    name: "Research Sandbox",
+    display_name: "Research Sandbox",
+  },
+  {
+    id: "ws_legacy",
+    name: "Legacy Summarizer",
+    display_name: "Legacy Summarizer",
+  },
+  { id: "ws_agents", name: "Agent Platform", display_name: "Agent Platform" },
+  { id: "ws_staging", name: "Staging", display_name: "Staging" },
+].map((w, i) => ({
+  ...w,
+  created_at: `2024-0${(i % 8) + 1}-01T00:00:00Z`,
+}));
 
-const ANTH_API_KEYS = ["key_aaa111bbb222", "key_ccc333ddd444"];
+// One entry per (workspace, api key, model) workload. Daily base volumes are
+// sized so every pattern clears its rule thresholds even at the low end of
+// the profile's scale range. wid undefined → default workspace.
+interface AnthWorkload {
+  wid?: string;
+  key: string;
+  model: string;
+  inp: number; // daily base input tokens
+  out: number; // daily base output tokens
+  reqs: number; // daily base requests
+  cacheRate: number; // share of input served from cache
+  cacheWrite?: number; // daily base cache-creation tokens
+  cacheReads?: number; // daily base cache-read tokens (overrides cacheRate)
+  mondayBoost?: boolean; // bursty Monday spikes → batch candidate
+}
 
-const ANTH_MODELS = [
-  { name: "claude-3-5-sonnet-20241022", inp: 8000, out: 2000 },
-  { name: "claude-3-opus-20240229", inp: 12000, out: 3000 },
-  { name: "claude-3-haiku-20240307", inp: 3000, out: 800 },
-  { name: "claude-sonnet-4-6-20250514", inp: 7000, out: 1800 },
-  { name: "claude-opus-4-6-20250514", inp: 11000, out: 2800 },
-  { name: "claude-haiku-4-5-20250514", inp: 2500, out: 600 },
+const ANTH_WORKLOADS: AnthWorkload[] = [
+  // Overloaded default workspace: the org's main app never got segmented.
+  {
+    key: "key_default_app",
+    model: "claude-opus-4-6-20250514",
+    inp: 2_400_000,
+    out: 250_000,
+    reqs: 700,
+    cacheRate: 0.15,
+  },
+  {
+    key: "key_default_app",
+    model: "claude-sonnet-4-6-20250514",
+    inp: 800_000,
+    out: 200_000,
+    reqs: 600,
+    cacheRate: 0.25,
+  },
+  {
+    key: "key_default_misc",
+    model: "claude-haiku-4-5-20250514",
+    inp: 400_000,
+    out: 100_000,
+    reqs: 300,
+    cacheRate: 0.1,
+  },
+  // Production: heavy volume, caching never enabled → prompt caching miss.
+  {
+    wid: "ws_prod",
+    key: "key_prod",
+    model: "claude-sonnet-4-6-20250514",
+    inp: 3_500_000,
+    out: 450_000,
+    reqs: 700,
+    cacheRate: 0.004,
+  },
+  // Support chatbot: Opus emitting tiny outputs → Haiku downgrade.
+  {
+    wid: "ws_support",
+    key: "key_support",
+    model: "claude-opus-4-6-20250514",
+    inp: 300_000,
+    out: 15_000,
+    reqs: 250,
+    cacheRate: 0.03,
+  },
+  // RAG service: enormous retrieval context per request → RAG bloat.
+  {
+    wid: "ws_rag",
+    key: "key_rag",
+    model: "claude-sonnet-4-6-20250514",
+    inp: 1_600_000,
+    out: 25_000,
+    reqs: 60,
+    cacheRate: 0.2,
+  },
+  // Nightly evals: Monday spikes, quiet otherwise → batch API candidate.
+  {
+    wid: "ws_evals",
+    key: "key_evals",
+    model: "claude-sonnet-4-6-20250514",
+    inp: 500_000,
+    out: 120_000,
+    reqs: 300,
+    cacheRate: 0.1,
+    mondayBoost: true,
+  },
+  // Research: Opus on moderate-complexity work → Opus→Sonnet downgrade.
+  {
+    wid: "ws_research",
+    key: "key_research",
+    model: "claude-opus-4-6-20250514",
+    inp: 700_000,
+    out: 70_000,
+    reqs: 100,
+    cacheRate: 0.1,
+  },
+  // Legacy summarizer: still on Claude 3 Opus → legacy model upgrade.
+  {
+    wid: "ws_legacy",
+    key: "key_legacy",
+    model: "claude-3-opus-20240229",
+    inp: 150_000,
+    out: 15_000,
+    reqs: 80,
+    cacheRate: 0,
+  },
+  // Agent platform: writes big cache prefixes it rarely reads back.
+  {
+    wid: "ws_agents",
+    key: "key_agents",
+    model: "claude-sonnet-4-6-20250514",
+    inp: 300_000,
+    out: 40_000,
+    reqs: 120,
+    cacheRate: 0,
+    cacheWrite: 400_000,
+    cacheReads: 20_000,
+  },
+  // Staging: light, well-behaved traffic — no findings expected.
+  {
+    wid: "ws_staging",
+    key: "key_staging",
+    model: "claude-haiku-4-5-20250514",
+    inp: 200_000,
+    out: 50_000,
+    reqs: 100,
+    cacheRate: 0.15,
+  },
 ];
 
 interface AnthEntry {
   bucket_start: string;
   model: string;
   api_key_id: string;
-  workspace_id: string;
+  workspace_id?: string;
   input_tokens: number;
   output_tokens: number;
   cache_read_input_tokens: number;
+  cache_creation_input_tokens: number;
   request_count: number;
 }
 
@@ -120,59 +259,33 @@ function genAnthropicEntries(
     const isWeekend = date.getDay() === 0 || date.getDay() === 6;
     const isMonday = date.getDay() === 1;
     const ds = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}T00:00:00Z`;
-    const scenario = rand();
 
-    for (const m of ANTH_MODELS) {
-      const ws =
-        ANTH_WORKSPACES[Math.floor(rand() * ANTH_WORKSPACES.length)].id;
-      const key = ANTH_API_KEYS[Math.floor(rand() * ANTH_API_KEYS.length)];
+    for (const w of ANTH_WORKLOADS) {
       const wm = isWeekend ? profile.weekendFactor : 1;
       const v = 0.5 + rand() * profile.volatility;
+      let mult = wm * v * scale;
+      if (w.mondayBoost) mult *= isMonday ? 8 : 0.3;
 
-      let inp: number, out: number, cache: number, reqs: number;
-
-      if (scenario < 0.15) {
-        // Low output ratio → model downgrade candidate
-        inp = Math.floor(2000 * wm * v * scale);
-        out = Math.floor((50 + rand() * 100) * wm * v * scale);
-        reqs = Math.floor(80 * wm * v * scale);
-        cache = Math.floor(inp * (0.02 + rand() * 0.03));
-      } else if (scenario < 0.3) {
-        // High input:output → RAG context bloat candidate
-        inp = Math.floor((15000 + rand() * 10000) * wm * v * scale);
-        out = Math.floor(400 * wm * v * scale);
-        reqs = Math.floor(30 * wm * v * scale);
-        cache = Math.floor(inp * (0.15 + rand() * 0.25));
-      } else if (scenario < 0.45) {
-        // High volume, low cache → prompt caching miss candidate
-        inp = Math.floor(25000 * wm * v * scale);
-        out = Math.floor(2500 * wm * v * scale);
-        reqs = Math.floor(150 * wm * v * scale);
-        cache = Math.floor(inp * (0.01 + rand() * 0.03));
-      } else if (scenario < 0.55) {
-        // Bursty Monday pattern → batch API candidate
-        inp = Math.floor(8000 * wm * v * scale);
-        out = Math.floor(2000 * wm * v * scale);
-        reqs = Math.floor(200 * wm * (isMonday ? 1.5 : 0.7) * scale);
-        cache = Math.floor(inp * (0.1 + rand() * 0.3) * profile.cacheAffinity);
-      } else {
-        // Baseline usage
-        inp = Math.floor(m.inp * wm * v * scale);
-        out = Math.floor(m.out * wm * v * scale);
-        reqs = Math.floor(80 * wm * v * scale);
-        cache = Math.floor(inp * (0.1 + rand() * 0.3) * profile.cacheAffinity);
-      }
+      const inp = Math.floor(w.inp * mult);
+      const out = Math.floor(w.out * mult);
+      const reqs = Math.floor(w.reqs * mult);
+      const cache =
+        w.cacheReads !== undefined
+          ? Math.floor(w.cacheReads * mult)
+          : Math.floor(inp * w.cacheRate * (0.8 + rand() * 0.4));
+      const cacheCreated = w.cacheWrite ? Math.floor(w.cacheWrite * mult) : 0;
 
       if (inp === 0 && out === 0) continue;
 
       entries.push({
         bucket_start: ds,
-        model: m.name,
-        api_key_id: key,
-        workspace_id: ws,
+        model: w.model,
+        api_key_id: w.key,
+        workspace_id: w.wid,
         input_tokens: inp,
         output_tokens: out,
         cache_read_input_tokens: Math.min(cache, Math.floor(inp * 0.9)),
+        cache_creation_input_tokens: cacheCreated,
         request_count: Math.max(1, reqs),
       });
     }
@@ -198,6 +311,7 @@ export function demoAnthropic(
     input_tokens: e.input_tokens,
     output_tokens: e.output_tokens,
     cache_read_input_tokens: e.cache_read_input_tokens,
+    cache_creation_input_tokens: e.cache_creation_input_tokens,
     request_count: e.request_count,
   }));
 
@@ -208,6 +322,7 @@ export function demoAnthropic(
     input_tokens: e.input_tokens,
     output_tokens: e.output_tokens,
     cache_read_input_tokens: e.cache_read_input_tokens,
+    cache_creation_input_tokens: e.cache_creation_input_tokens,
     request_count: e.request_count,
   }));
 
@@ -218,6 +333,7 @@ export function demoAnthropic(
     input_tokens: e.input_tokens,
     output_tokens: e.output_tokens,
     cache_read_input_tokens: e.cache_read_input_tokens,
+    cache_creation_input_tokens: e.cache_creation_input_tokens,
     request_count: e.request_count,
   }));
 

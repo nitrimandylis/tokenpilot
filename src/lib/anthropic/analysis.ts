@@ -3,6 +3,7 @@
 import type {
   AggregatedRow,
   Finding,
+  FindingSignal,
   TemporalPattern,
   Workspace,
   UsageBucket,
@@ -13,6 +14,18 @@ import {
   Severity,
 } from "@/types/analysis";
 import { pr, tc } from "./pricing";
+import {
+  cacheWriteEconomics,
+  costBatchDiscount,
+  costEnableCaching,
+  costGenerationUpgrade,
+  costHaikuDowngrade,
+  costRagReduction,
+  costSonnetDowngrade,
+  ragReductionFactor,
+  upgradeTarget,
+  type CostRow,
+} from "./costing";
 import { $, P } from "@/lib/formatters";
 
 /* ═══════════════════ AGGREGATION ═══════════════════ */
@@ -198,6 +211,17 @@ export function findIssues(
     const temporal = analyzeTemporalPattern(rawBuckets || [], r.kid, r.model);
     const inputVariance = ai > 5000 ? "high" : ai > 1000 ? "medium" : "low";
 
+    // Shared input to the costing module — all optimized costs derive from it.
+    const costRow: CostRow = {
+      model: r.model,
+      inp: r.inp,
+      out: r.out,
+      cached: r.cached,
+      cacheCreated: r.cacheCreated,
+      cur,
+      conf: 0,
+    };
+
     // Initialize set for this API key if not exists
     const keyId = r.kid || r.model;
     if (!addedCategoriesByKey[keyId]) {
@@ -211,7 +235,8 @@ export function findIssues(
       reason: string,
       action: string,
       severity: Finding["sev"],
-      confidence: number
+      confidence: number,
+      signals?: FindingSignal[]
     ) => {
       // Skip if this category was already added for this API key
       if (addedCategoriesByKey[keyId].has(category)) {
@@ -248,23 +273,28 @@ export function findIssues(
           impact,
           activeDays: r.activeDays,
           temporal,
+          source: "rules",
+          signals,
         });
       }
     };
 
     /* ─── RULE 1: Model Downgrade → Haiku ─── */
     if ((isO || isS) && ao > 0 && ao < 150 && r.reqs > 50) {
-      const signals = [
-        { weight: 0.3, met: ao < 80 },
-        { weight: 0.25, met: r.reqs > 500 },
-        { weight: 0.2, met: inputVariance !== "high" },
-        { weight: 0.15, met: ai < 2000 },
-        { weight: 0.1, met: r.activeDays > 20 },
+      const signals: FindingSignal[] = [
+        { weight: 0.3, met: ao < 80, label: "avg output < 80 tok" },
+        { weight: 0.25, met: r.reqs > 500, label: "500+ requests" },
+        {
+          weight: 0.2,
+          met: inputVariance !== "high",
+          label: "input not oversized",
+        },
+        { weight: 0.15, met: ai < 2000, label: "avg input < 2k tok" },
+        { weight: 0.1, met: r.activeDays > 20, label: "20+ active days" },
       ];
       const conf = confidenceScore(signals);
       if (conf >= 0.4) {
-        const h = pr("haiku-4-5");
-        const opt = (r.inp / 1e6) * h.i + (r.out / 1e6) * h.o;
+        const opt = costHaikuDowngrade(costRow);
         const reason = `Avg output ${ao} tokens across ${r.reqs.toLocaleString()} reqs (avg input ${ai.toLocaleString()} tok). Pattern consistent with classification, routing, or extraction.`;
         const action = `Switch to claude-haiku-4-5. Run a 100-request A/B test first — if accuracy delta <2%, ship it.`;
         const sev = conf >= 0.65 ? Severity.CRITICAL : Severity.WARNING;
@@ -274,27 +304,25 @@ export function findIssues(
           reason,
           action,
           sev,
-          conf
+          conf,
+          signals
         );
       }
     }
 
     /* ─── RULE 2: RAG Context Bloat ─── */
     if (ratio > 12 && !isH && r.inp > 10e6) {
-      const signals = [
-        { weight: 0.3, met: ratio > 20 },
-        { weight: 0.25, met: ai > 8000 },
-        { weight: 0.2, met: ao < 500 },
-        { weight: 0.15, met: r.reqs > 100 },
-        { weight: 0.1, met: cr < 0.1 },
+      const signals: FindingSignal[] = [
+        { weight: 0.3, met: ratio > 20, label: "in:out ratio > 20:1" },
+        { weight: 0.25, met: ai > 8000, label: "avg input > 8k tok" },
+        { weight: 0.2, met: ao < 500, label: "avg output < 500 tok" },
+        { weight: 0.15, met: r.reqs > 100, label: "100+ requests" },
+        { weight: 0.1, met: cr < 0.1, label: "cache rate < 10%" },
       ];
       const conf = confidenceScore(signals);
       if (conf >= 0.4) {
-        const reductionFactor = conf >= 0.7 ? 0.5 : 0.6;
-        const targetP = isO ? pr("sonnet-4-6") : p;
-        const opt =
-          ((r.inp * reductionFactor) / 1e6) * targetP.i +
-          (r.out / 1e6) * targetP.o;
+        const reductionFactor = ragReductionFactor(conf);
+        const opt = costRagReduction(costRow, conf);
         const reason = `Input:output ratio ${ratio.toFixed(0)}:1 (~${ai.toLocaleString()} tok/req input, ~${ao} output). ${(r.inp / 1e6).toFixed(1)}M input tokens/mo. Retrieval pulling too many chunks.`;
         const action = `Audit retrieval pipeline: reduce top-k, add reranking, tighten chunk size. ${isO ? "Downgrade to Sonnet — RAG quality is retrieval-bound, not model-bound." : ""} Conservative: ${Math.round((1 - reductionFactor) * 100)}% input reduction.`;
         const sev = conf >= 0.65 ? Severity.CRITICAL : Severity.WARNING;
@@ -304,26 +332,23 @@ export function findIssues(
           reason,
           action,
           sev,
-          conf
+          conf,
+          signals
         );
       }
     }
 
     /* ─── RULE 3: Prompt Caching Miss ─── */
     if (cr < 0.05 && r.inp > 20e6 && !isH) {
-      const signals = [
-        { weight: 0.35, met: cr < 0.01 },
-        { weight: 0.25, met: r.reqs > 200 },
-        { weight: 0.2, met: ai > 3000 },
-        { weight: 0.2, met: r.activeDays > 15 },
+      const signals: FindingSignal[] = [
+        { weight: 0.35, met: cr < 0.01, label: "≈0 cache reads" },
+        { weight: 0.25, met: r.reqs > 200, label: "200+ requests" },
+        { weight: 0.2, met: ai > 3000, label: "avg input > 3k tok" },
+        { weight: 0.2, met: r.activeDays > 15, label: "15+ active days" },
       ];
       const conf = confidenceScore(signals);
       if (conf >= 0.4) {
-        const cacheable = r.inp * 0.6;
-        const opt =
-          ((r.inp - cacheable) / 1e6) * p.i +
-          (cacheable / 1e6) * p.i * 0.1 +
-          (r.out / 1e6) * p.o;
+        const opt = costEnableCaching(costRow);
         const reason = `${(r.inp / 1e6).toFixed(1)}M input at ${(cr * 100).toFixed(1)}% cache rate. ${cr < 0.01 ? "Caching appears disabled." : "Minimal caching."} System prompts re-sent every request without caching.`;
         const action = `Enable prompt caching on static prefixes (system prompt, tool defs, persistent context). Add cache_control breakpoints in message array. ~90% savings on cached portion.`;
         const sev = conf >= 0.65 ? Severity.CRITICAL : Severity.WARNING;
@@ -333,24 +358,24 @@ export function findIssues(
           reason,
           action,
           sev,
-          conf
+          conf,
+          signals
         );
       }
     }
 
     /* ─── RULE 4: Opus Overkill → Sonnet ─── */
     if (isO && ao >= 150 && r.inp > 5e6) {
-      const signals = [
-        { weight: 0.3, met: ao < 1500 },
-        { weight: 0.25, met: r.reqs > 100 },
-        { weight: 0.2, met: ratio < 10 },
-        { weight: 0.15, met: ai < 10000 },
-        { weight: 0.1, met: r.activeDays > 15 },
+      const signals: FindingSignal[] = [
+        { weight: 0.3, met: ao < 1500, label: "avg output < 1.5k tok" },
+        { weight: 0.25, met: r.reqs > 100, label: "100+ requests" },
+        { weight: 0.2, met: ratio < 10, label: "in:out ratio < 10:1" },
+        { weight: 0.15, met: ai < 10000, label: "avg input < 10k tok" },
+        { weight: 0.1, met: r.activeDays > 15, label: "15+ active days" },
       ];
       const conf = confidenceScore(signals);
       if (conf >= 0.4) {
-        const s = pr("sonnet-4-6");
-        const opt = (r.inp / 1e6) * s.i + (r.out / 1e6) * s.o;
+        const opt = costSonnetDowngrade(costRow);
         const reason = `${p.l} with avg ${ao} tok output, ${r.reqs.toLocaleString()} reqs. Moderate complexity where Sonnet performs within 5% of Opus.`;
         const action = `A/B test Sonnet 4.6 on 10% traffic split. If quality holds, migrate fully. Opus→Sonnet saves ~80%.`;
         const sev = conf >= 0.65 ? Severity.WARNING : Severity.INFO;
@@ -360,22 +385,27 @@ export function findIssues(
           reason,
           action,
           sev,
-          conf
+          conf,
+          signals
         );
       }
     }
 
     /* ─── RULE 5: Batch API Candidate ─── */
     if (temporal.batchCandidate && r.reqs > 200 && cur > 5) {
-      const signals = [
-        { weight: 0.35, met: temporal.burstiness > 1.5 },
-        { weight: 0.25, met: r.reqs > 500 },
-        { weight: 0.2, met: !isH },
-        { weight: 0.2, met: r.activeDays < 25 },
+      const signals: FindingSignal[] = [
+        {
+          weight: 0.35,
+          met: temporal.burstiness > 1.5,
+          label: "high burstiness (CoV > 1.5)",
+        },
+        { weight: 0.25, met: r.reqs > 500, label: "500+ requests" },
+        { weight: 0.2, met: !isH, label: "premium-tier model" },
+        { weight: 0.2, met: r.activeDays < 25, label: "< 25 active days" },
       ];
       const conf = confidenceScore(signals);
       if (conf >= 0.4) {
-        const opt = cur * 0.5;
+        const opt = costBatchDiscount(costRow);
         const reason = `Bursty traffic (CoV: ${temporal.burstiness.toFixed(1)}, ~${Math.round(temporal.meanDaily)} reqs/day avg). ${r.reqs.toLocaleString()} total reqs with periodic spikes — batch processing or eval runs.`;
         const action = `Migrate to Batch API for 50% cost reduction. Processes within 24hrs. If not latency-sensitive, this is free money.`;
         const sev = conf >= 0.65 ? Severity.WARNING : Severity.INFO;
@@ -385,7 +415,8 @@ export function findIssues(
           reason,
           action,
           sev,
-          conf
+          conf,
+          signals
         );
       }
     }
@@ -394,14 +425,11 @@ export function findIssues(
     // Cache writes cost 25% MORE than regular input; reads cost 90% LESS.
     // Break-even: each written token only needs 0.28 reads to pay for itself.
     // Fire when writes are large but reads are sparse → cache invalidating before reuse.
-    if (r.cacheCreated > 2e6 && r.cached / r.cacheCreated < 1.0) {
-      const reuseFactor = r.cacheCreated > 0 ? r.cached / r.cacheCreated : 0;
-      const writeExtra = (r.cacheCreated / 1e6) * p.i * 0.25;
-      const readSaving = (r.cached / 1e6) * p.i * 0.9;
-      const netCacheCost = writeExtra - readSaving;
+    const cacheEcon = cacheWriteEconomics(costRow);
+    if (cacheEcon && r.cacheCreated > 2e6 && cacheEcon.reuseFactor < 1.0) {
+      const { reuseFactor, netCacheCost, opt } = cacheEcon;
       if (netCacheCost > 1) {
         const conf = Math.min(0.9, 0.5 + (1.0 - reuseFactor) * 0.5);
-        const opt = cur - netCacheCost * 0.6;
         const reason = `Wrote ${(r.cacheCreated / 1e6).toFixed(1)}M cache tokens but only read back ${(r.cached / 1e6).toFixed(1)}M (${(reuseFactor * 100).toFixed(0)}% reuse). Cache paying ${$(netCacheCost)}/mo more than it saves — invalidating before adequate reuse.`;
         const action = `Extend cache TTL (up to 5 min default, up to 60 min with extended cache). Ensure system prompt structure is stable between requests. Avoid inserting dynamic content before the cache breakpoint.`;
         addFinding(
@@ -417,17 +445,10 @@ export function findIssues(
 
     /* ─── RULE 6: Legacy Model ─── */
     if (p.g > 0 && p.g < 3 && cur > 2) {
-      const newer =
-        p.t === AnthropicModelTier.OPUS
-          ? pr("opus-4-6")
-          : p.t === AnthropicModelTier.SONNET
-            ? pr("sonnet-4-6")
-            : pr("haiku-4-5");
-      const newerCost = (r.inp / 1e6) * newer.i + (r.out / 1e6) * newer.o;
-      const savOrCost = cur - newerCost;
+      const newer = upgradeTarget(r.model);
+      const opt = costGenerationUpgrade(costRow);
       const conf = 0.8;
-      const opt = Math.min(cur, newerCost);
-      const reason = `Running ${p.l} (gen ${p.g}). ${newer.l} offers better performance${savOrCost > 0 ? " at lower cost" : ""}.`;
+      const reason = `Running ${p.l} (gen ${p.g}). ${newer.l} offers better performance${opt < cur ? " at lower cost" : ""}.`;
       const action = `Update model string to ${newer.l.toLowerCase().replace(/ /g, "-")}. Drop-in replacement — test on staging, then ship.`;
       const sev = Severity.INFO;
       addFinding(
@@ -547,6 +568,7 @@ After setup, you'll be able to see: "Production: $450/mo, Staging: $120/mo, Dev:
         batchCandidate: false,
         meanDaily: 0,
       },
+      source: "rules",
     });
   }
 
@@ -623,6 +645,7 @@ After routing, return to this view next month — you should see spend distribut
         batchCandidate: false,
         meanDaily: 0,
       },
+      source: "rules",
     });
   }
 
