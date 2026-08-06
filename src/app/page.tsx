@@ -18,7 +18,7 @@ import {
 import { toSummariesAnthropic, toSummariesOpenAI } from "@/lib/nim/adapters";
 import { tc } from "@/lib/anthropic/pricing";
 import { tcOpenAI } from "@/lib/openai/pricing";
-import { demoAnthropic, demoOpenAI, DEMO_SEED } from "@/lib/demo";
+import { demoAnthropic, demoOpenAI, type DemoPersona } from "@/lib/demo";
 import type { Report } from "@/types";
 import Footer from "@/components/Footer";
 import { FadeUp } from "@/components/motion/FadeUp";
@@ -178,6 +178,9 @@ function HomeContent() {
   // toggle only shows when the server reports NIM is configured.
   const [nimAvailable, setNimAvailable] = useState(false);
   const [useNim, setUseNim] = useState(false);
+
+  // Demo persona: which org archetype "Try with sample data" simulates.
+  const [demoPersona, setDemoPersona] = useState<DemoPersona>("enterprise");
 
   useEffect(() => {
     fetch("/api/nim")
@@ -580,6 +583,11 @@ function HomeContent() {
       const year = now.getFullYear();
       const month = now.getMonth();
       const id = generateId();
+      // One fresh random seed per click: every demo run is a new org, but the
+      // same seed threads through all six monthly calls so the run stays
+      // internally coherent. Randomness lives here in the UI layer only —
+      // the generators in demo.ts stay pure.
+      const seed = Date.now() % 2147483647;
 
       if (vendor === Vendor.OPENAI) {
         setStep("Simulating 6 months of OpenAI usage...");
@@ -591,7 +599,7 @@ function HomeContent() {
             y--;
           }
 
-          const d = demoOpenAI(y, m, DEMO_SEED);
+          const d = demoOpenAI(y, m, seed, demoPersona, i);
           const rows = aggOpenAI(d.usage);
 
           let spend = 0;
@@ -690,7 +698,7 @@ function HomeContent() {
           y--;
         }
 
-        const d = demoAnthropic(y, m, DEMO_SEED);
+        const d = demoAnthropic(y, m, seed, demoPersona, i);
         const bk = agg(d.bk);
         const bm = agg(d.bm);
         const src = bk.length ? bk : bm;
@@ -912,6 +920,34 @@ function HomeContent() {
                 >
                   Try with sample data →
                 </button>
+
+                {/* Demo persona picker: which org archetype to simulate */}
+                <div
+                  role="radiogroup"
+                  aria-label="Sample data persona"
+                  className="mt-2 flex gap-1 p-1 rounded-sm bg-ink-elevated border border-ink-border w-full"
+                >
+                  {(
+                    [
+                      ["enterprise", "Sprawling enterprise"],
+                      ["startup", "Lean startup"],
+                    ] as [DemoPersona, string][]
+                  ).map(([p, label]) => (
+                    <button
+                      key={p}
+                      role="radio"
+                      aria-checked={demoPersona === p}
+                      onClick={() => setDemoPersona(p)}
+                      className={`flex-1 px-3 py-1.5 text-[11px] font-mono rounded-sm transition-all cursor-pointer ${
+                        demoPersona === p
+                          ? "bg-ink-border text-bone"
+                          : "text-bone-subtle hover:text-bone"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
 
                 {/* Error display */}
                 {err && (
