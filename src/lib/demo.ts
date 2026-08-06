@@ -5,6 +5,12 @@ import type {
   OpenAICostsData,
 } from "@/lib/openai/api";
 
+// Fixed default seed so every demo run generates the same org, the same
+// 6-month trend, and the same hero savings number. Thread one seed through
+// all monthly calls of a run — re-seeding per month would produce a different
+// fake org each month.
+export const DEMO_SEED = 20260717;
+
 // ─── PRNG ────────────────────────────────────────────────────────────────────
 
 function makeRand(seed: number): () => number {
@@ -175,8 +181,11 @@ function genAnthropicEntries(
   return entries;
 }
 
-export function demoAnthropic(year: number, month: number): PullResult {
-  const seed = Date.now() & 0x7fffffff;
+export function demoAnthropic(
+  year: number,
+  month: number,
+  seed: number = DEMO_SEED
+): PullResult {
   const profile = newProfile(seed);
 
   const org: Organization = { id: "demo_org_01", name: profile.orgName };
@@ -319,8 +328,11 @@ const OAI_SERVICES: ServiceConfig[] = [
   },
 ];
 
-export function demoOpenAI(year: number, month: number): OpenAIPullResult {
-  const seed = Date.now() & 0x7fffffff;
+export function demoOpenAI(
+  year: number,
+  month: number,
+  seed: number = DEMO_SEED
+): OpenAIPullResult {
   const profile = newProfile(seed);
   const rand = makeRand(seed ^ (year * 12 + month) ^ hashStr("oai"));
   const { scale } = profile;
