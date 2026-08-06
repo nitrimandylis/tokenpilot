@@ -81,6 +81,12 @@ export interface AggregatedRow {
   activeDays: number;
 }
 
+// Which engine surfaced a finding in a consensus run. "rules" = deterministic
+// rule engine; "llm" = AI-spotted (priced deterministically); "both" = found
+// independently by both engines. Optional so reports stored before consensus
+// runs existed still parse.
+export type FindingSource = "rules" | "llm" | "both";
+
 export interface Finding {
   id: string;
   name: string;
@@ -106,6 +112,7 @@ export interface Finding {
   impact: string;
   activeDays: number;
   temporal: TemporalPattern;
+  source?: FindingSource;
 }
 
 export interface WorkspaceSpend {
@@ -115,8 +122,10 @@ export interface WorkspaceSpend {
 }
 
 // Which engine produced a report's findings. "rules" = deterministic rule
-// engine; "llm" = NVIDIA NIM LLM-guided analysis.
-export type AnalysisEngine = "rules" | "llm";
+// engine; "hybrid" = consensus run (rules + NVIDIA NIM LLM augmentation);
+// "llm" stays valid so reports stored by the old LLM-replaces-rules mode
+// still parse and render.
+export type AnalysisEngine = "rules" | "llm" | "hybrid";
 
 // Token usage of the NIM analysis call itself, for the ROI footer on
 // LLM-engine reports.

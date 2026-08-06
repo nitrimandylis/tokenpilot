@@ -271,6 +271,7 @@ export function findIssues(
           impact,
           activeDays: r.activeDays,
           temporal,
+          source: "rules",
         });
       }
     };
@@ -551,6 +552,7 @@ After setup, you'll be able to see: "Production: $450/mo, Staging: $120/mo, Dev:
         batchCandidate: false,
         meanDaily: 0,
       },
+      source: "rules",
     });
   }
 
@@ -627,6 +629,7 @@ After routing, return to this view next month — you should see spend distribut
         batchCandidate: false,
         meanDaily: 0,
       },
+      source: "rules",
     });
   }
 

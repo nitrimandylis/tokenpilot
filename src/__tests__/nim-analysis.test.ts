@@ -1,11 +1,18 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import {
-  mergeLlmFindings,
   buildSystemPrompt,
-  type UsageSummary,
+  findIssuesLLM,
+  mergeConsensus,
+  priceLlmFindings,
+  resolveCategory,
+  validCategories,
   type AnalysisContext,
+  type LlmProposal,
+  type UsageSummary,
 } from "@/lib/nim/analysis";
-import { Severity } from "@/types/analysis";
+import { costEnableCaching, costHaikuDowngrade } from "@/lib/anthropic/costing";
+import { AnthropicCategory, Severity } from "@/types/analysis";
+import type { Finding } from "@/types";
 
 const row: UsageSummary = {
   id: "key1-ws1",
@@ -28,101 +35,143 @@ const ctx: AnalysisContext = {
   workspaceCount: 1,
 };
 
-describe("mergeLlmFindings", () => {
-  it("clamps savings to [0, currentCost] and grounds dollar figures", () => {
-    const [f] = mergeLlmFindings(
+const proposal = (over: Partial<LlmProposal> = {}): LlmProposal => ({
+  rowId: "key1-ws1",
+  category: AnthropicCategory.PROMPT_CACHING,
+  severity: "warning",
+  confidence: 0.7,
+  reason: "r",
+  action: "a",
+  ...over,
+});
+
+describe("priceLlmFindings", () => {
+  it("prices proposals deterministically from the costing module", () => {
+    const [f] = priceLlmFindings(
       [
-        {
-          rowId: "key1-ws1",
+        proposal({
           category: "Model Downgrade → Haiku",
           severity: "critical",
           confidence: 0.9,
-          savingsMonthly: 9999, // absurd; must clamp to cur
-          reason: "low output",
-          action: "switch model",
-        },
+        }),
       ],
       [row],
       ctx
     );
-    expect(f.sav).toBe(200);
-    expect(f.opt).toBe(0);
-    expect(f.cur).toBe(200);
+    const expectedOpt = costHaikuDowngrade({
+      model: row.model,
+      inp: row.inp,
+      out: row.out,
+      cached: 0,
+      cacheCreated: 0,
+      cur: row.cur,
+      conf: 0.9,
+    });
+    expect(f.opt).toBeCloseTo(expectedOpt, 10);
+    expect(f.sav).toBeCloseTo(row.cur - expectedOpt, 10);
     expect(f.sev).toBe(Severity.CRITICAL);
     expect(f.model).toBe("claude-opus-4-6");
+    expect(f.source).toBe("llm");
+    expect(f.cat).toBe(AnthropicCategory.MODEL_DOWNGRADE_HAIKU);
   });
 
-  it("clamps negative savings to 0 and confidence to [0,1]", () => {
-    const [f] = mergeLlmFindings(
-      [
-        {
-          rowId: "key1-ws1",
-          category: "Model Upgrade", // quality category survives zero savings
-          severity: "info",
-          confidence: 5,
-          savingsMonthly: -50,
-          reason: "r",
-          action: "a",
-        },
-      ],
+  it("prices a caching proposal with the enable-caching formula", () => {
+    const [f] = priceLlmFindings([proposal()], [row], ctx);
+    expect(f.opt).toBeCloseTo(
+      costEnableCaching({
+        model: row.model,
+        inp: row.inp,
+        out: row.out,
+        cached: 0,
+        cacheCreated: 0,
+        cur: row.cur,
+        conf: 0.7,
+      }),
+      10
+    );
+  });
+
+  it("drops proposals whose category is outside the fixed enum", () => {
+    const out = priceLlmFindings(
+      [proposal({ category: "Made Up Category" })],
       [row],
       ctx
     );
-    expect(f.sav).toBe(0);
-    expect(f.conf).toBe(1);
-    expect(f.impact).toBe("Quality improvement");
+    expect(out).toHaveLength(0);
   });
 
-  it("handles org-level findings with no matching row", () => {
-    const [f] = mergeLlmFindings(
+  it("drops uncostable cost categories but keeps org categories at $0", () => {
+    const out = priceLlmFindings(
       [
-        {
+        // RAG on a row with no matching id → no metrics → uncostable → dropped
+        proposal({ rowId: "missing", category: "RAG Optimization" }),
+        // Org-structure finding survives with zero savings
+        proposal({
           rowId: "org",
           category: "Workspace Organization",
           severity: "info",
-          confidence: 0.8,
-          savingsMonthly: 0,
-          reason: "all spend in default",
-          action: "split workspaces",
-        },
+        }),
       ],
       [row],
       ctx
     );
-    expect(f.cur).toBe(200); // falls back to totalSpend
-    expect(f.name).toBe("Organization");
+    expect(out).toHaveLength(1);
+    expect(out[0].cat).toBe(AnthropicCategory.WORKSPACE_ORGANIZATION);
+    expect(out[0].sav).toBe(0);
+    expect(out[0].cur).toBe(200); // falls back to totalSpend
+    expect(out[0].name).toBe("Organization");
+    expect(out[0].impact).toBe("Quality improvement");
   });
 
-  it("drops findings without a reason and sorts by severity then savings", () => {
-    const out = mergeLlmFindings(
+  it("clamps confidence to [0,1]", () => {
+    const [f] = priceLlmFindings([proposal({ confidence: 5 })], [row], ctx);
+    expect(f.conf).toBe(1);
+  });
+
+  it("drops a 'downgrade' whose target is not cheaper than the row's model", () => {
+    const haikuRow: UsageSummary = {
+      ...row,
+      id: "key2-ws1",
+      model: "claude-haiku-3",
+      ml: "Haiku 3",
+      cur: 5,
+    };
+    const out = priceLlmFindings(
       [
-        {
-          rowId: "key1-ws1",
-          category: "A",
-          severity: "info",
-          confidence: 0.5,
-          savingsMonthly: 10,
-          reason: "r",
-          action: "a",
-        },
-        {
-          rowId: "bad",
-          category: "B",
-          severity: "critical",
-          confidence: 0.5,
-          savingsMonthly: 10,
-          reason: "",
-          action: "a",
-        },
-        {
-          rowId: "key1-ws1",
-          category: "C",
-          severity: "critical",
-          confidence: 0.5,
-          savingsMonthly: 50,
-          reason: "r",
-          action: "a",
-        },
+        proposal({ rowId: "key2-ws1", category: "Model Downgrade → Sonnet" }),
+        proposal({ rowId: "key2-ws1", category: "Model Downgrade → Haiku" }),
+      ],
+      [haikuRow],
+      ctx
+    );
+    expect(out).toHaveLength(0);
+  });
+
+  it("keeps only the single best downgrade per row", () => {
+    const out = priceLlmFindings(
+      [
+        proposal({ category: "Model Downgrade → Sonnet" }),
+        proposal({ category: "Model Downgrade → Haiku" }),
+      ],
+      [row],
+      ctx
+    );
+    // Haiku repricing saves more than Sonnet repricing on an Opus row.
+    expect(out).toHaveLength(1);
+    expect(out[0].cat).toBe(AnthropicCategory.MODEL_DOWNGRADE_HAIKU);
+  });
+
+  it("dedupes repeated (row, category) proposals", () => {
+    const out = priceLlmFindings([proposal(), proposal()], [row], ctx);
+    expect(out).toHaveLength(1);
+  });
+
+  it("drops proposals without a reason and sorts by severity then savings", () => {
+    const out = priceLlmFindings(
+      [
+        proposal({ category: "Batch API Migration", severity: "info" }),
+        proposal({ reason: "", severity: "critical" }),
+        proposal({ category: "Prompt Caching", severity: "critical" }),
       ],
       [row],
       ctx
@@ -133,107 +182,170 @@ describe("mergeLlmFindings", () => {
   });
 });
 
-describe("mergeLlmFindings guardrails", () => {
-  // A cheap Haiku row — downgrades to pricier tiers must be rejected.
-  const haikuRow: UsageSummary = {
-    ...row,
-    id: "key2-ws1",
-    name: "key2",
-    model: "claude-haiku-3",
-    ml: "Haiku 3",
-    cur: 0.03,
-  };
-  const f = (over: Partial<Record<string, unknown>>) => ({
-    rowId: "key1-ws1",
-    category: "X",
-    severity: "warning",
-    confidence: 0.7,
-    savingsMonthly: 10,
-    reason: "r",
-    action: "a",
-    ...over,
-  });
-
-  it("drops a 'downgrade' whose target is not cheaper than the row's model", () => {
-    const out = mergeLlmFindings(
-      [
-        f({
-          rowId: "key2-ws1",
-          category: "Model Downgrade → Sonnet",
-          savingsMonthly: 0.01,
-        }),
-        f({
-          rowId: "key2-ws1",
-          category: "Model Downgrade → Haiku",
-          savingsMonthly: 0.01,
-        }),
-      ],
-      [haikuRow],
-      ctx
+describe("resolveCategory", () => {
+  it("canonicalizes arrow and case drift", () => {
+    expect(resolveCategory("anthropic", "model downgrade -> haiku")).toBe(
+      AnthropicCategory.MODEL_DOWNGRADE_HAIKU
     );
-    // Haiku→Sonnet (upgrade) and Haiku→Haiku (no-op) both dropped.
-    expect(out).toHaveLength(0);
-  });
-
-  it("keeps only the single best downgrade per row", () => {
-    const out = mergeLlmFindings(
-      [
-        f({ category: "Model Downgrade → Sonnet", savingsMonthly: 80 }),
-        f({ category: "Model Downgrade → Haiku", savingsMonthly: 90 }),
-      ],
-      [row],
-      ctx
+    expect(resolveCategory("anthropic", "Prompt Caching")).toBe(
+      AnthropicCategory.PROMPT_CACHING
     );
-    expect(out).toHaveLength(1);
-    expect(out[0].cat).toContain("Haiku");
-    expect(out[0].sav).toBe(90);
-  });
-
-  it("caps cumulative savings per row at the row's spend", () => {
-    const out = mergeLlmFindings(
-      [
-        f({ category: "Prompt Caching", savingsMonthly: 150 }),
-        f({ category: "RAG Optimization", savingsMonthly: 150 }),
-      ],
-      [row], // cur = 200
-      ctx
-    );
-    const total = out.reduce((s, x) => s + x.sav, 0);
-    expect(total).toBeLessThanOrEqual(200);
-    expect(total).toBeCloseTo(200);
-  });
-
-  it("drops zero-savings cost findings as noise", () => {
-    const out = mergeLlmFindings(
-      [f({ category: "Batch API Migration", savingsMonthly: 0 })],
-      [row],
-      ctx
-    );
-    expect(out).toHaveLength(0);
-  });
-
-  it("drops cost findings the cumulative cap zeroed out (no $0 'quality' noise)", () => {
-    // First finding claims the row's whole cost; later ones get capped to $0
-    // and must not survive as junk "Quality improvement" rows.
-    const out = mergeLlmFindings(
-      [
-        f({ category: "Prompt Caching", savingsMonthly: 200 }), // = full cur
-        f({ category: "RAG Optimization", savingsMonthly: 50 }),
-        f({ category: "Batch API Migration", savingsMonthly: 50 }),
-      ],
-      [row], // cur = 200
-      ctx
-    );
-    expect(out).toHaveLength(1);
-    expect(out[0].cat).toBe("Prompt Caching");
-    expect(out.every((x) => x.sav > 0)).toBe(true);
+    expect(resolveCategory("anthropic", "nonsense")).toBeNull();
   });
 });
 
-describe("buildSystemPrompt", () => {
-  it("includes the analysis rules and vendor-appropriate models", () => {
+/* ─── Consensus merge ─── */
+
+const mkRuleFinding = (over: Partial<Finding> = {}): Finding => ({
+  id: "key1-ws1-prompt-caching",
+  name: "key1",
+  ws: "production",
+  model: "claude-opus-4-6",
+  ml: "Opus 4.6",
+  inp: 10_000_000,
+  out: 100_000,
+  cached: 0,
+  reqs: 1000,
+  ao: 100,
+  ai: 10_000,
+  ratio: 100,
+  cr: 0,
+  cur: 200,
+  opt: 120,
+  sav: 80,
+  reason: "rule reason",
+  action: "rule action",
+  sev: Severity.WARNING,
+  cat: AnthropicCategory.PROMPT_CACHING,
+  conf: 0.8,
+  impact: "$80.00/mo (40%)",
+  activeDays: 25,
+  temporal: {
+    burstiness: 0.2,
+    consistency: 0.8,
+    batchCandidate: false,
+    meanDaily: 300,
+  },
+  source: "rules",
+  ...over,
+});
+
+describe("mergeConsensus", () => {
+  it("merges findings found by both engines, keeping the rule's text and price", () => {
+    const ruleF = mkRuleFinding({ conf: 0.7 });
+    const [llmF] = priceLlmFindings(
+      [proposal({ confidence: 0.6, reason: "llm reason" })],
+      [row],
+      ctx
+    );
+    const merged = mergeConsensus([ruleF], [llmF]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0].source).toBe("both");
+    expect(merged[0].reason).toBe("rule reason");
+    expect(merged[0].action).toBe("rule action");
+    expect(merged[0].sav).toBe(80); // rule's deterministic price kept
+    expect(merged[0].conf).toBeCloseTo(0.8); // max(0.7, 0.6) + 0.1
+  });
+
+  it("caps the consensus confidence boost at 0.95", () => {
+    const ruleF = mkRuleFinding({ conf: 0.92 });
+    const [llmF] = priceLlmFindings(
+      [proposal({ confidence: 0.9 })],
+      [row],
+      ctx
+    );
+    const merged = mergeConsensus([ruleF], [llmF]);
+    expect(merged[0].conf).toBe(0.95);
+  });
+
+  it("keeps rules-only findings unchanged with source 'rules'", () => {
+    const ruleF = mkRuleFinding();
+    const merged = mergeConsensus([ruleF], []);
+    expect(merged).toHaveLength(1);
+    expect(merged[0].source).toBe("rules");
+    expect(merged[0].conf).toBe(0.8);
+    expect(merged[0].sav).toBe(80);
+  });
+
+  it("keeps LLM-only findings with their deterministic price and source 'llm'", () => {
+    const ruleF = mkRuleFinding(); // prompt caching from rules
+    const [llmF] = priceLlmFindings(
+      [proposal({ category: "Batch API Migration", reason: "bursty" })],
+      [row],
+      ctx
+    );
+    const merged = mergeConsensus([ruleF], [llmF]);
+    expect(merged).toHaveLength(2);
+    const llmOnly = merged.find((f) => f.source === "llm");
+    expect(llmOnly).toBeDefined();
+    expect(llmOnly!.cat).toBe(AnthropicCategory.BATCH_API_MIGRATION);
+    expect(llmOnly!.sav).toBeCloseTo(100, 10); // 50% of $200, priced by code
+    expect(llmOnly!.reason).toBe("bursty");
+  });
+
+  it("merges org-structure findings from both engines despite different id shapes", () => {
+    const ruleOrg = mkRuleFinding({
+      id: "workspace-organization-unused",
+      cat: AnthropicCategory.WORKSPACE_ORGANIZATION,
+      sev: Severity.INFO,
+      sav: 0,
+      conf: 1.0,
+    });
+    const [llmOrg] = priceLlmFindings(
+      [
+        proposal({
+          rowId: "org",
+          category: "Workspace Organization",
+          severity: "info",
+        }),
+      ],
+      [row],
+      ctx
+    );
+    const merged = mergeConsensus([ruleOrg], [llmOrg]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0].source).toBe("both");
+  });
+});
+
+/* ─── LLM contract: the model never sees or emits a savings field ─── */
+
+describe("LLM payload schema", () => {
+  it("the system prompt contains no savings field and lists valid categories", () => {
+    for (const vendor of ["anthropic", "openai"] as const) {
+      const prompt = buildSystemPrompt(vendor);
+      expect(prompt).not.toContain("savingsMonthly");
+      expect(prompt).not.toMatch(/"savings/i);
+      for (const c of validCategories(vendor)) {
+        expect(prompt).toContain(`"${c}"`);
+      }
+    }
     expect(buildSystemPrompt("anthropic")).toContain("claude-haiku-4-5");
     expect(buildSystemPrompt("openai")).toContain("gpt-4o-mini");
     expect(buildSystemPrompt("anthropic")).toContain("RAG CONTEXT BLOAT");
+  });
+
+  it("the request payload sent to NIM contains no savings field", async () => {
+    let captured = "";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init: RequestInit) => {
+        captured = String(init.body);
+        return new Response(
+          JSON.stringify({
+            choices: [{ message: { content: '{"findings": []}' } }],
+          }),
+          { status: 200 }
+        );
+      })
+    );
+    await findIssuesLLM([row], ctx);
+    expect(captured).not.toBe("");
+    expect(captured).not.toContain("savingsMonthly");
+    expect(captured.toLowerCase()).not.toContain('"savings');
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 });

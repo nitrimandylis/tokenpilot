@@ -302,6 +302,7 @@ export function findIssuesOpenAI(
             batchCandidate: false,
             meanDaily: r.activeDays > 0 ? r.reqs / r.activeDays : 0,
           },
+          source: "rules",
         });
       }
     };
@@ -701,6 +702,7 @@ export function findIssuesOpenAI(
         batchCandidate: false,
         meanDaily: 0,
       },
+      source: "rules",
     });
   }
 
@@ -745,6 +747,7 @@ export function findIssuesOpenAI(
         batchCandidate: false,
         meanDaily: 0,
       },
+      source: "rules",
     });
   }
 

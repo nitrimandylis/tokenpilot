@@ -17,6 +17,36 @@ interface RowProps {
   index: number;
 }
 
+/** Per-finding provenance badge: which engine(s) surfaced this finding. */
+function SourceBadge({ source }: { source: NonNullable<Finding["source"]> }) {
+  const style =
+    source === "both"
+      ? "border-moss/30 bg-moss/10 text-moss-light"
+      : source === "llm"
+        ? "border-info/30 bg-info/10 text-info"
+        : "border-ink-border bg-ink text-bone-subtle";
+  const label =
+    source === "both"
+      ? "Rules + AI"
+      : source === "llm"
+        ? "AI-spotted"
+        : "Rules";
+  return (
+    <span
+      className={`px-1.5 py-0.5 rounded-full border text-[9px] font-mono shrink-0 ${style}`}
+      title={
+        source === "both"
+          ? "Found independently by the rule engine and the AI model"
+          : source === "llm"
+            ? "Spotted by the AI model, priced deterministically from your data"
+            : "Found by the deterministic rule engine"
+      }
+    >
+      {label}
+    </span>
+  );
+}
+
 function Row({ f, open, toggle, vendor, index }: RowProps) {
   const isAnthropic = vendor === Vendor.ANTHROPIC;
   const isOpenAI = vendor === Vendor.OPENAI;
@@ -56,11 +86,14 @@ function Row({ f, open, toggle, vendor, index }: RowProps) {
 
         {/* Title + meta */}
         <div className="flex-1 min-w-0">
-          <span
-            className="font-display font-semibold text-[19px] text-bone block truncate"
-            style={{ letterSpacing: "-0.03em" }}
-          >
-            {f.name}
+          <span className="flex items-center gap-2 min-w-0">
+            <span
+              className="font-display font-semibold text-[19px] text-bone block truncate"
+              style={{ letterSpacing: "-0.03em" }}
+            >
+              {f.name}
+            </span>
+            {f.source && <SourceBadge source={f.source} />}
           </span>
           <p className="text-xs text-bone-subtle mt-0.5 font-sans">
             {f.cat} · {f.ws} · {f.ml}

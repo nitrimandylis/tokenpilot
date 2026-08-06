@@ -586,7 +586,11 @@ function RecommendationsPageContent() {
             className="px-2 py-0.5 rounded-full border border-ink-border bg-ink-elevated text-[10px] font-mono text-bone-subtle"
             title="Which analysis engine produced this report"
           >
-            {(r.engine ?? "rules") === "llm" ? "LLM analysis" : "Rule engine"}
+            {(r.engine ?? "rules") === "hybrid"
+              ? "Rules + AI consensus"
+              : (r.engine ?? "rules") === "llm"
+                ? "LLM analysis"
+                : "Rule engine"}
           </span>
           {r && r.savings > 0 && (
             <span className="px-2 py-0.5 rounded-full bg-moss/10 border border-moss/20 text-xs font-mono font-medium text-moss-light">
@@ -1195,7 +1199,7 @@ function RecommendationsPageContent() {
         <p className="text-[11px] text-bone-subtle font-mono">
           Prices as of {pricingDate}
         </p>
-        {r.engine === "llm" && r.llmUsage && (
+        {(r.engine === "llm" || r.engine === "hybrid") && r.llmUsage && (
           <p className="text-[11px] text-bone-subtle font-mono">
             This analysis cost ~$
             {r.llmUsage.costUsd < 0.01
