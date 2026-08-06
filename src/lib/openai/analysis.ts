@@ -18,6 +18,7 @@ import {
   type OpenAICostRow,
 } from "./costing";
 import { $, P } from "@/lib/formatters";
+import { capRowSavings } from "@/lib/savingsCap";
 import type { OpenAIUsageData } from "./api";
 
 /* ═══════════════════ SERVICE TYPES ═══════════════════ */
@@ -770,7 +771,7 @@ export function findIssuesOpenAI(
     });
   }
 
-  return out.sort((a, b) => {
+  return capRowSavings(out).sort((a, b) => {
     const sv: Record<Severity, number> = {
       [Severity.CRITICAL]: 0,
       [Severity.WARNING]: 1,

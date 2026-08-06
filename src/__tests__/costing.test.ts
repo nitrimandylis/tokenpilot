@@ -354,11 +354,13 @@ describe("OpenAI costing functions vs rule engine", () => {
   });
 
   it("costGpt4oDowngrade matches the o-series overkill rule", () => {
+    // ao 260 keeps rule 1 (mini downgrade, ao < 200) from stacking on this
+    // row and eating the cap's headroom.
     const r = oaiRow({
       model: "o1-preview",
       line_item: "o1",
       inp: 2_000_000,
-      out: 150_000,
+      out: 260_000,
       reqs: 1000,
       cost: 45,
     });
@@ -370,11 +372,14 @@ describe("OpenAI costing functions vs rule engine", () => {
   });
 
   it("costPromptTrim matches rule 8's optimized cost", () => {
+    // Sized so only rule 8 (and the small rule-6 info) fires: inp under the
+    // RAG and 4o-overkill gates, reqs under the steady-batch gate — otherwise
+    // those findings consume the per-row savings cap.
     const r = oaiRow({
-      inp: 30_000_000,
-      out: 500_000,
-      reqs: 2000,
-      cost: 100,
+      inp: 4_800_000,
+      out: 150_000,
+      reqs: 500,
+      cost: 40,
     });
     const f = findIssuesOpenAI([r], []).find(
       (x) => x.cat === OpenAICategory.PROMPT_OPTIMIZATION
@@ -400,7 +405,9 @@ describe("OpenAI costing functions vs rule engine", () => {
   });
 
   it("costTenPercentTrim matches the high-impact rules", () => {
-    const r = oaiRow({ cost: 90 });
+    // Costs-API-only row (no token data) so token-based rules can't stack
+    // and crowd out the high-impact finding under the per-row cap.
+    const r = oaiRow({ cost: 90, inp: 0, out: 0, reqs: 0 });
     const f = findIssuesOpenAI([r], []).find(
       (x) => x.cat === OpenAICategory.HIGH_IMPACT_OPPORTUNITY
     );

@@ -27,6 +27,7 @@ import {
   type CostRow,
 } from "./costing";
 import { $, P } from "@/lib/formatters";
+import { capRowSavings } from "@/lib/savingsCap";
 
 /* ═══════════════════ AGGREGATION ═══════════════════ */
 
@@ -649,7 +650,7 @@ After routing, return to this view next month — you should see spend distribut
     });
   }
 
-  return out.sort((a, b) => {
+  return capRowSavings(out).sort((a, b) => {
     const sv: Record<Finding["sev"], number> = {
       [Severity.CRITICAL]: 0,
       [Severity.WARNING]: 1,

@@ -19,6 +19,7 @@ import type {
 import { AnthropicCategory, OpenAICategory, Severity } from "@/types/analysis";
 import { optimizedCostAnthropic } from "@/lib/anthropic/costing";
 import { optimizedCostOpenAI } from "@/lib/openai/costing";
+import { KEEP_ZERO_SAVINGS, capRowSavings, rowKeyOf } from "@/lib/savingsCap";
 
 /** Default NIM-hosted model. OpenAI-compatible chat completions. */
 export const NIM_DEFAULT_MODEL = "meta/llama-3.3-70b-instruct";
@@ -270,10 +271,6 @@ function downgradeTargetRank(category: string): number | null {
   return tierRank(target);
 }
 
-// Categories where a zero-savings finding is still worth surfacing (quality
-// or organizational wins), matching the rule engines' behavior.
-const KEEP_ZERO_SAVINGS = /upgrade|organization|workspace|project|quality/i;
-
 interface Candidate {
   finding: Finding;
   rowId: string;
@@ -441,17 +438,11 @@ function bySeverityThenSavings(a: Finding, b: Finding): number {
   return sv[a.sev] !== sv[b.sev] ? sv[a.sev] - sv[b.sev] : b.sav - a.sav;
 }
 
-// A finding's merge key: the row it belongs to plus its category. Rule and LLM
-// finding ids share the shape `${rowId}-${categorySlug}`, so stripping the
-// category slug recovers the row id. Org-level findings (workspace/project
-// organization) collapse to a shared "org" row so both engines' versions of
-// the same structural insight merge into one.
+// A finding's merge key: the row it belongs to (see rowKeyOf — org-level
+// findings collapse to a shared "org" row) plus its category, so both
+// engines' versions of the same insight merge into one.
 export function consensusKey(f: Finding): string {
-  const catSlug = slug(f.cat as string);
-  if (/organization/i.test(f.cat as string)) return `org|${catSlug}`;
-  const suffix = `-${catSlug}`;
-  const rowId = f.id.endsWith(suffix) ? f.id.slice(0, -suffix.length) : f.id;
-  return `${rowId}|${catSlug}`;
+  return `${rowKeyOf(f)}|${slug(f.cat as string)}`;
 }
 
 /**
@@ -487,7 +478,9 @@ export function mergeConsensus(
     merged.push({ ...lf, source: "llm" });
   }
 
-  return merged.sort(bySeverityThenSavings);
+  // Rule and LLM findings were each capped alone; their union can still claim
+  // more than a row spends, so the cap runs again on the merged set.
+  return capRowSavings(merged).sort(bySeverityThenSavings);
 }
 
 /** Extract a JSON object even if the model wraps it in prose / code fences. */
