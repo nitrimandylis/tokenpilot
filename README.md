@@ -16,7 +16,7 @@ _an LLM spend auditor that reads your Admin API and tells you where the money le
 ![telemetry](https://img.shields.io/badge/telemetry-0-3fb950?style=flat-square&labelColor=111111)
 ![keys](https://img.shields.io/badge/your_API_keys-never_leave_the_browser-3fb950?style=flat-square&labelColor=111111)
 ![access](https://img.shields.io/badge/access-read--only._we_touch_nothing-d4a017?style=flat-square&labelColor=111111)
-![rules](https://img.shields.io/badge/detection_rules-19-d4a017?style=flat-square&labelColor=111111)
+![rules](https://img.shields.io/badge/detection_rules-22-d4a017?style=flat-square&labelColor=111111)
 ![engine](https://img.shields.io/badge/AI_augmentation-detects%2C_never_prices-3fb950?style=flat-square&labelColor=111111)
 ![savings](<https://img.shields.io/badge/savings-real._(your_CFO_may_weep)-3fb950?style=flat-square&labelColor=111111>)
 
@@ -28,7 +28,7 @@ _an LLM spend auditor that reads your Admin API and tells you where the money le
 
 Most teams discover their LLM bill the way you discover a parking ticket.
 TokenPilot reads your **Anthropic and OpenAI Admin APIs**, runs your actual
-token volumes through a **19-rule detection engine** (7 Anthropic, 12 OpenAI),
+token volumes through a **22-rule detection engine** (9 Anthropic, 13 OpenAI),
 and hands back confidence-scored savings recommendations in about 60 seconds.
 No theoretical benchmarks — every dollar figure is computed from _your_ usage.
 
@@ -37,7 +37,7 @@ the tab does, and never gets sent anywhere except the vendor it belongs to.
 
 ```console
 nick@tokenpilot:~$ audit --vendor anthropic
-[✓] 7 rules executed. 4 findings. estimated waste: not zero.
+[✓] 9 rules executed. 4 findings. estimated waste: not zero.
 [i] your keys stayed in this tab. as is tradition.
 ```
 
@@ -49,7 +49,7 @@ nick@tokenpilot:~$ audit --vendor anthropic
 | 02  | **RAG context bloat**        | prompts hauling around more context than the answer needs      |
 | 03  | **missing prompt caching**   | repeated prefixes paying full price on every single call       |
 | 04  | **cache-write waste**        | caches written at a 25% premium, then invalidated before reuse |
-| 05  | **batch API opportunity**    | bursty _or_ steady non-urgent volume missing the 50%-off lane  |
+| 05  | **batch API opportunity**    | bursty, steady, or weekly-cron volume missing the 50%-off lane |
 | 06  | **prompt bloat**             | verbose prompts where a trim saves real input tokens           |
 | 07  | **reasoning-model overkill** | o-series reasoning premiums spent on non-reasoning work        |
 | 08  | **quality upgrade**          | the reverse case — places a smarter model would pay for itself |

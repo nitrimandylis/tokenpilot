@@ -11,7 +11,7 @@ Built as part of Nick's Omilia internship; doubles as a portfolio project.
 
 ## Where it stands (2026-08-06)
 
-- **19 detection rules** (7 Anthropic, 12 OpenAI) with weighted-signal
+- **22 detection rules** (9 Anthropic, 13 OpenAI) with weighted-signal
   confidence scoring and per-finding signal trails.
 - **Consensus engine**: optional NVIDIA NIM augmentation runs alongside the
   rules, proposes findings from a fixed category set, and never prices —
@@ -33,13 +33,17 @@ Built as part of Nick's Omilia internship; doubles as a portfolio project.
 Next candidates, in rough order (none committed):
 
 1. **Live NIM verification** — the AI path has only ever run against mocked
-   responses; needs a real key and a real llama round-trip.
+   responses; needs a real key and a real llama round-trip. The demo now
+   makes exactly one NIM call per run (current month only), so it doubles
+   as the cheapest live test.
 2. **Confidence calibration** — seed-sweep the rule engine, verify
    high-confidence findings are actually more robust, tune signal weights.
-3. **Temporal/scheduling rule** — burstiness and consistency data is already
-   collected per finding and underused.
-4. **Cross-vendor comparison** — both pricing tables are in the repo; "this
+3. **Cross-vendor comparison** — both pricing tables are in the repo; "this
    workload on the other vendor" is a finding single-vendor tools can't make.
+
+Shipped from this list 2026-08-06: temporal/scheduling rules (weekly-cadence
+5d/4c, steady-batch 5c with a weekend-parity gate that keeps batch advice off
+interactive traffic).
 
 Explicitly cut (do not revive without a reason): token literacy score,
 conversational drill-down, history/analytics investment beyond what exists.

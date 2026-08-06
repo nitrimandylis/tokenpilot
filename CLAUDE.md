@@ -43,7 +43,7 @@ Aggregation (agg/aggOpenAI)
     └─ Consolidates usage buckets by model/key/workspace
     ↓
 Analysis Engine (findIssues/findIssuesOpenAI)
-    └─ Runs the vendor's rule set (7 Anthropic / 12 OpenAI) with confidence
+    └─ Runs the vendor's rule set (9 Anthropic / 13 OpenAI) with confidence
        scoring; optional NIM consensus merges LLM proposals on top, priced
        by lib/{vendor}/costing.ts — the LLM never emits dollar figures
     ↓
@@ -78,9 +78,11 @@ History page → Detail routes → /recommendations, /analytics, /raw-data
 - Service-level analytics: tracks spending by service type (embeddings, completions, audio, images, etc.)
 - Per-project service breakdown charts showing monthly usage across all services
 
-### Analysis Engine (6 Rules)
+### Analysis Engine (22 rules: 9 Anthropic, 13 OpenAI)
 
-Located in `lib/anthropic/analysis.ts` (381 lines) and `lib/openai/analysis.ts`:
+Located in `lib/anthropic/analysis.ts` and `lib/openai/analysis.ts` — the
+`RULE n:` comment headers in those files are the authoritative list. The core
+categories:
 
 1. **Model Downgrade** → Haiku/GPT-4o-mini
    - Detects low output:input ratio suggesting overprovisioned model
@@ -94,8 +96,12 @@ Located in `lib/anthropic/analysis.ts` (381 lines) and `lib/openai/analysis.ts`:
    - High volume with low cache rate (<10%) suggests missing cache config
    - Temporal signal: consistent daily usage pattern
 
-4. **Batch API Migration**
+4. **Batch API Migration** (three detectors, most specific wins the per-key
+   category dedupe)
+   - Weekly cadence: volume recurring on 1-2 weekdays = a cron job (5d/4c)
    - Bursty traffic (coefficient of variation >1.2) or 30%+ zero-usage days
+   - Steady high volume that runs flat through weekends (weekendParity ≥ 0.85
+     gates out interactive traffic) (5c/4b)
    - 50% input cost discount for async batch processing
 
 5. **Model Upgrade** (quality, not cost)
@@ -116,7 +122,7 @@ Located in `lib/anthropic/analysis.ts` (381 lines) and `lib/openai/analysis.ts`:
 
 - `lib/storage.ts` - localStorage abstraction with ULID-based IDs
 - `lib/anthropic/api.ts` - Admin API client, rate limit handling, date range utilities
-- `lib/anthropic/analysis.ts` - 7-rule detection engine, confidence scoring
+- `lib/anthropic/analysis.ts` - 9-rule detection engine, confidence scoring, temporal patterns (weekday cadence, weekend parity)
 - `lib/anthropic/costing.ts` - deterministic optimized-cost formulas per category (OpenAI parallel in `lib/openai/costing.ts`)
 - `lib/nim/analysis.ts` - NIM LLM proposals, deterministic pricing, consensus merge (`source: rules|llm|both`)
 - `lib/savingsCap.ts` - caps cumulative per-row savings at the row's spend, applied by every engine output
