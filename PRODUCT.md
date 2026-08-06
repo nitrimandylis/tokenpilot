@@ -36,8 +36,11 @@ Next candidates, in rough order (none committed):
    responses; needs a real key and a real llama round-trip. The demo now
    makes exactly one NIM call per run (current month only), so it doubles
    as the cheapest live test.
-2. **Confidence calibration** — seed-sweep the rule engine, verify
-   high-confidence findings are actually more robust, tune signal weights.
+2. **Confidence calibration** — the measuring half shipped (`npm run
+calibrate`: seed-sweeps both engines, persistence-under-noise vs
+   confidence). First run flagged OpenAI rule 8 (Prompt Optimization) as
+   overconfident: 0.98 mean confidence, 81% persistence. The retune of that
+   rule's signals is the remaining work.
 3. **Cross-vendor comparison** — both pricing tables are in the repo; "this
    workload on the other vendor" is a finding single-vendor tools can't make.
 
