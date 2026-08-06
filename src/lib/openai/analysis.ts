@@ -1,7 +1,8 @@
 /* ═══════════════════ OpenAI ANALYSIS ENGINE ═══════════════════ */
 
-import type { Finding, FindingSignal } from "@/types";
+import type { Finding, FindingSignal, TemporalPattern } from "@/types";
 import { OpenAICategory, Severity } from "@/types/analysis";
+import { temporalFromDailyCounts } from "@/lib/anthropic/analysis";
 import { prOpenAI, tcOpenAI } from "./pricing";
 import {
   costBatchDiscountOpenAI,
@@ -44,6 +45,9 @@ export interface OpenAIAggregatedRow {
   inp: number; // context/input tokens
   out: number; // generated/output tokens
   reqs: number; // requests
+  // Daily request-count pattern, set by aggOpenAI when the usage data carries
+  // day buckets. Absent on costs-API-only rows.
+  temporal?: TemporalPattern;
 }
 
 /**
@@ -109,7 +113,13 @@ export function aggOpenAICosts(costs: any): OpenAIAggregatedRow[] {
  * @returns Array of aggregated rows
  */
 export function aggOpenAI(usage: OpenAIUsageData): OpenAIAggregatedRow[] {
-  const m: Record<string, OpenAIAggregatedRow & { days: Set<string> }> = {};
+  const m: Record<
+    string,
+    OpenAIAggregatedRow & {
+      days: Set<string>;
+      dailyReqs: Record<string, number>;
+    }
+  > = {};
 
   // Handle combined results from multiple endpoints
   for (const d of usage.data || []) {
@@ -127,6 +137,7 @@ export function aggOpenAI(usage: OpenAIUsageData): OpenAIAggregatedRow[] {
         out: 0,
         reqs: 0,
         days: new Set(),
+        dailyReqs: {},
         activeDays: 0,
       };
     }
@@ -148,24 +159,23 @@ export function aggOpenAI(usage: OpenAIUsageData): OpenAIAggregatedRow[] {
       m[k].reqs += d.num_model_requests || 0;
     }
 
-    // Track days with activity
-    if (d.bucket_start_time) {
-      const day = new Date(d.bucket_start_time * 1000)
-        .toISOString()
-        .split("T")[0];
+    // Track days with activity plus per-day request counts, which feed the
+    // temporal pattern (burstiness, weekly cadence) on the aggregated row.
+    const ts = d.bucket_start_time || d.aggregation_timestamp;
+    if (ts) {
+      const day = new Date(ts * 1000).toISOString().split("T")[0];
       m[k].days.add(day);
-    } else if (d.aggregation_timestamp) {
-      const day = new Date(d.aggregation_timestamp * 1000)
-        .toISOString()
-        .split("T")[0];
-      m[k].days.add(day);
+      m[k].dailyReqs[day] =
+        (m[k].dailyReqs[day] || 0) + (d.num_model_requests || 0);
     }
   }
 
   return Object.values(m).map((r) => ({
     ...r,
     activeDays: r.days.size,
+    temporal: temporalFromDailyCounts(r.dailyReqs),
     days: undefined,
+    dailyReqs: undefined,
   })) as OpenAIAggregatedRow[];
 }
 
@@ -464,6 +474,53 @@ export function findIssuesOpenAI(
         const sev = conf >= 0.65 ? Severity.WARNING : Severity.INFO;
         addFinding(
           OpenAICategory.MODEL_DOWNGRADE_MINI,
+          opt,
+          reason,
+          action,
+          sev,
+          conf,
+          undefined,
+          signals
+        );
+      }
+    }
+
+    /* ─── RULE 4c: Weekly-Cadence Scheduled Job ─── */
+    // The most specific batch diagnosis, so it runs before rules 4/4b (they
+    // share a category and addFinding keeps the first per row): traffic that
+    // recurs on one or two weekdays is a cron job, and a cron job is by
+    // definition latency-tolerant — the strongest possible Batch API case.
+    if (
+      !isNonCompletionsService &&
+      r.temporal?.dominantWeekdays?.length &&
+      (r.temporal.weekdayConcentration ?? 0) >= 0.75 &&
+      r.reqs > 200 &&
+      cur > 5
+    ) {
+      const wc = r.temporal.weekdayConcentration ?? 0;
+      const signals: FindingSignal[] = [
+        {
+          weight: 0.35,
+          met: wc >= 0.9,
+          label: "≥90% of volume on the dominant weekday(s)",
+        },
+        { weight: 0.25, met: r.reqs > 500, label: "500+ requests" },
+        { weight: 0.2, met: !isGPT4OMini, label: "higher-tier model" },
+        {
+          weight: 0.2,
+          met: r.temporal.burstiness > 1.2,
+          label: "spiky daily volume",
+        },
+      ];
+      const conf = confidenceScore(signals);
+      if (conf >= 0.5) {
+        const opt = costBatchDiscountOpenAI(costRow);
+        const days = r.temporal.dominantWeekdays.join(" and ");
+        const reason = `${Math.round(wc * 100)}% of ${r.reqs.toLocaleString()} monthly requests run on ${days} — a scheduled-job cadence, not interactive traffic.`;
+        const action = `A workload that runs on a weekly schedule already tolerates latency. Move it to the Batch API for a 50% discount — same schedule, half the price.`;
+        const sev = conf >= 0.65 ? Severity.WARNING : Severity.INFO;
+        addFinding(
+          OpenAICategory.BATCH_API_MIGRATION,
           opt,
           reason,
           action,

@@ -92,25 +92,25 @@ export function agg(buckets: UsageBucket[]): AggregatedRow[] {
  * @param model - Optional model name to filter by
  * @returns Temporal pattern metrics including burstiness and batch candidacy
  */
-export function analyzeTemporalPattern(
-  buckets: UsageBucket[],
-  kid?: string,
-  model?: string
+const WEEKDAY_NAMES = [
+  "Sunday",
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+];
+
+/**
+ * Temporal metrics from a per-day request-count map (keys "YYYY-MM-DD").
+ * Shared by the Anthropic bucket path and the OpenAI aggregation, so both
+ * vendors' rows carry the same burstiness / weekday-cadence data.
+ */
+export function temporalFromDailyCounts(
+  daily: Record<string, number>
 ): TemporalPattern {
-  const daily: Record<string, { reqs: number }> = {};
-
-  for (const b of buckets) {
-    if (kid && b.api_key_id !== kid) continue;
-    if (model && b.model !== model) continue;
-
-    const day = b.bucket_start?.split("T")[0];
-    if (!day) continue;
-
-    if (!daily[day]) daily[day] = { reqs: 0 };
-    daily[day].reqs += b.request_count || 0;
-  }
-
-  const vals = Object.values(daily).map((d) => d.reqs);
+  const vals = Object.values(daily);
 
   if (vals.length < 3) {
     return {
@@ -128,12 +128,79 @@ export function analyzeTemporalPattern(
   const batchCandidate =
     (cv > 1.2 && mean > 20) || (zeroDays > vals.length * 0.3 && mean > 50);
 
+  // Weekly cadence: how much of the volume lands on the top-2 weekdays, and
+  // whether the top weekday actually recurs (3+ distinct dates) — one busy
+  // Tuesday is a spike, four busy Tuesdays are a cron job.
+  const byWeekday = new Map<number, { reqs: number; dates: number }>();
+  let total = 0;
+  for (const [day, reqs] of Object.entries(daily)) {
+    const dow = new Date(`${day}T00:00:00Z`).getUTCDay();
+    const w = byWeekday.get(dow) ?? { reqs: 0, dates: 0 };
+    w.reqs += reqs;
+    w.dates += 1;
+    byWeekday.set(dow, w);
+    total += reqs;
+  }
+  const ranked = [...byWeekday.entries()].sort((a, b) => b[1].reqs - a[1].reqs);
+  const top2 = ranked.slice(0, 2);
+  const weekdayConcentration =
+    total > 0 ? top2.reduce((s, [, w]) => s + w.reqs, 0) / total : 0;
+  const recurring = ranked.length > 0 && ranked[0][1].dates >= 3;
+  const dominantWeekdays = recurring
+    ? top2
+        .filter(([, w]) => w.reqs > total * 0.2)
+        .map(([dow]) => WEEKDAY_NAMES[dow])
+    : undefined;
+
+  // Weekend parity: does the workload keep running on weekends? Interactive
+  // human traffic dips; scheduled/pipeline traffic doesn't.
+  let wkdayReqs = 0,
+    wkdayDates = 0,
+    wkendReqs = 0,
+    wkendDates = 0;
+  for (const [dow, w] of byWeekday) {
+    if (dow === 0 || dow === 6) {
+      wkendReqs += w.reqs;
+      wkendDates += w.dates;
+    } else {
+      wkdayReqs += w.reqs;
+      wkdayDates += w.dates;
+    }
+  }
+  const wkdayMean = wkdayDates > 0 ? wkdayReqs / wkdayDates : 0;
+  const wkendMean = wkendDates > 0 ? wkendReqs / wkendDates : 0;
+  const weekendParity =
+    wkdayMean > 0 && wkendDates > 0 ? wkendMean / wkdayMean : undefined;
+
   return {
     burstiness: cv,
     consistency: 1 - cv,
     batchCandidate,
     meanDaily: mean,
+    weekdayConcentration,
+    dominantWeekdays,
+    weekendParity,
   };
+}
+
+export function analyzeTemporalPattern(
+  buckets: UsageBucket[],
+  kid?: string,
+  model?: string
+): TemporalPattern {
+  const daily: Record<string, number> = {};
+
+  for (const b of buckets) {
+    if (kid && b.api_key_id !== kid) continue;
+    if (model && b.model !== model) continue;
+
+    const day = b.bucket_start?.split("T")[0];
+    if (!day) continue;
+
+    daily[day] = (daily[day] || 0) + (b.request_count || 0);
+  }
+
+  return temporalFromDailyCounts(daily);
 }
 
 /* ═══════════════════ CONFIDENCE SCORING ═══════════════════ */
@@ -392,6 +459,51 @@ export function findIssues(
       }
     }
 
+    /* ─── RULE 5d: Weekly-Cadence Scheduled Job ─── */
+    // The most specific batch diagnosis, so it runs before rules 5/5c (they
+    // share a category and addFinding keeps the first per key): traffic that
+    // recurs on one or two weekdays is a cron job, and a cron job is by
+    // definition latency-tolerant — the strongest possible Batch API case.
+    if (
+      temporal.dominantWeekdays?.length &&
+      (temporal.weekdayConcentration ?? 0) >= 0.75 &&
+      r.reqs > 200 &&
+      cur > 5
+    ) {
+      const wc = temporal.weekdayConcentration ?? 0;
+      const signals: FindingSignal[] = [
+        {
+          weight: 0.35,
+          met: wc >= 0.9,
+          label: "≥90% of volume on the dominant weekday(s)",
+        },
+        { weight: 0.25, met: r.reqs > 500, label: "500+ requests" },
+        { weight: 0.2, met: !isH, label: "premium-tier model" },
+        {
+          weight: 0.2,
+          met: temporal.burstiness > 1.2,
+          label: "spiky daily volume",
+        },
+      ];
+      const conf = confidenceScore(signals);
+      if (conf >= 0.5) {
+        const opt = costBatchDiscount(costRow);
+        const days = temporal.dominantWeekdays.join(" and ");
+        const reason = `${Math.round(wc * 100)}% of ${r.reqs.toLocaleString()} monthly requests run on ${days} — a scheduled-job cadence, not interactive traffic.`;
+        const action = `A workload that runs on a weekly schedule already tolerates latency. Move it to the Batch API for a 50% discount — same schedule, half the price.`;
+        const sev = conf >= 0.65 ? Severity.WARNING : Severity.INFO;
+        addFinding(
+          AnthropicCategory.BATCH_API_MIGRATION,
+          opt,
+          reason,
+          action,
+          sev,
+          conf,
+          signals
+        );
+      }
+    }
+
     /* ─── RULE 5: Batch API Candidate ─── */
     if (temporal.batchCandidate && r.reqs > 200 && cur > 5) {
       const signals: FindingSignal[] = [
@@ -409,6 +521,52 @@ export function findIssues(
         const opt = costBatchDiscount(costRow);
         const reason = `Bursty traffic (CoV: ${temporal.burstiness.toFixed(1)}, ~${Math.round(temporal.meanDaily)} reqs/day avg). ${r.reqs.toLocaleString()} total reqs with periodic spikes — batch processing or eval runs.`;
         const action = `Migrate to Batch API for 50% cost reduction. Processes within 24hrs. If not latency-sensitive, this is free money.`;
+        const sev = conf >= 0.65 ? Severity.WARNING : Severity.INFO;
+        addFinding(
+          AnthropicCategory.BATCH_API_MIGRATION,
+          opt,
+          reason,
+          action,
+          sev,
+          conf,
+          signals
+        );
+      }
+    }
+
+    /* ─── RULE 5c: High-Volume Batch Candidate (steady traffic) ─── */
+    // Rules 5d/5 catch scheduled and bursty loads. This catches steady
+    // high-volume workloads where Batch API still saves 50% if the caller
+    // can tolerate 24h latency — the Anthropic mirror of OpenAI's rule 4b.
+    // Weekend parity ≥ 0.85 keeps this off interactive traffic: a workload
+    // that dips on weekends is human-driven and can't wait 24h for a batch.
+    if (
+      r.reqs > 1000 &&
+      cur > 30 &&
+      r.activeDays >= 20 &&
+      temporal.consistency >= 0.6 &&
+      (temporal.weekendParity ?? 1) >= 0.85
+    ) {
+      const signals: FindingSignal[] = [
+        { weight: 0.35, met: cur > 80, label: "spend > $80/mo" },
+        { weight: 0.25, met: r.reqs > 5000, label: "5k+ requests" },
+        { weight: 0.2, met: !isH, label: "premium-tier model" },
+        {
+          weight: 0.1,
+          met: temporal.meanDaily < 2000,
+          label: "steady daily volume",
+        },
+        {
+          weight: 0.1,
+          met: (temporal.weekendParity ?? 0) >= 0.95,
+          label: "runs flat through weekends",
+        },
+      ];
+      const conf = confidenceScore(signals);
+      if (conf >= 0.4) {
+        const opt = costBatchDiscount(costRow);
+        const reason = `${r.reqs.toLocaleString()} requests/mo (~${Math.round(temporal.meanDaily)}/day, ${r.activeDays} active days, ${Math.round(temporal.consistency * 100)}% consistent). Steady high-volume pattern — Batch API gives 50% off for async workloads with 24hr turnaround.`;
+        const action = `If any of these calls are latency-tolerant (evals, data processing, nightly jobs), migrate to the Batch API. Zero code change beyond switching the endpoint.`;
         const sev = conf >= 0.65 ? Severity.WARNING : Severity.INFO;
         addFinding(
           AnthropicCategory.BATCH_API_MIGRATION,

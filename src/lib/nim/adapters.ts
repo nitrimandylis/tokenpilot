@@ -64,6 +64,7 @@ export function toSummariesOpenAI(
       reqs: r.reqs,
       activeDays: r.activeDays,
       cur,
+      temporal: r.temporal,
     };
   });
 }

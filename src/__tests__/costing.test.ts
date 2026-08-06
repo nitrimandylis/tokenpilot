@@ -83,10 +83,12 @@ describe("Anthropic costing functions vs rule engine", () => {
   });
 
   it("costRagReduction matches rule 2's optimized cost", () => {
+    // 30 reqs/day keeps monthly reqs under rule 5c's steady-batch gate so
+    // only the RAG (and caching) findings share this row's savings headroom.
     const buckets = anthBuckets("claude-sonnet-4-6", {
       input_tokens: 12_000_000,
       output_tokens: 200_000,
-      request_count: 200,
+      request_count: 30,
     });
     const rows = agg(buckets);
     const f = findIssues(rows, [], buckets).find(

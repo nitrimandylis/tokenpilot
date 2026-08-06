@@ -264,16 +264,19 @@ function HomeContent() {
   // When AI augmentation is on, run BOTH engines: rules first, then the LLM,
   // merged with per-finding provenance (engine "hybrid"). A NIM failure
   // degrades to the rules-only findings with a notice — the report is never
-  // empty. Used by both the real analysis and the demo.
+  // empty. Used by both the real analysis and the demo; the demo passes
+  // llmEligible=false for its five historical months so a run makes one NIM
+  // call (the current month), not six.
   const nimOn = () => useNim && nimAvailable;
 
   const analyzeAnthropic = async (
     src: Parameters<typeof toSummariesAnthropic>[0],
     ws: Parameters<typeof toSummariesAnthropic>[1],
     buckets: Parameters<typeof toSummariesAnthropic>[2],
-    spend: number
+    spend: number,
+    llmEligible = true
   ): Promise<AnalysisOutcome> => {
-    if (nimOn()) {
+    if (llmEligible && nimOn()) {
       setStep("Augmenting rule analysis with NVIDIA NIM...");
       return analyzeWithFallback(
         () =>
@@ -291,9 +294,10 @@ function HomeContent() {
   const analyzeOpenAI = async (
     rows: Parameters<typeof toSummariesOpenAI>[0],
     projects: Parameters<typeof toSummariesOpenAI>[1],
-    spend: number
+    spend: number,
+    llmEligible = true
   ): Promise<AnalysisOutcome> => {
-    if (nimOn()) {
+    if (llmEligible && nimOn()) {
       setStep("Augmenting rule analysis with NVIDIA NIM...");
       return analyzeWithFallback(
         () =>
@@ -615,7 +619,12 @@ function HomeContent() {
             }
           }
 
-          const analysis = await analyzeOpenAI(rows, d.projects, spend);
+          const analysis = await analyzeOpenAI(
+            rows,
+            d.projects,
+            spend,
+            i === 0
+          );
           const findings = analysis.findings;
 
           let ti = 0,
@@ -713,7 +722,13 @@ function HomeContent() {
           to += a.out;
         }
 
-        const analysis = await analyzeAnthropic(src, d.ws, buckets, spend);
+        const analysis = await analyzeAnthropic(
+          src,
+          d.ws,
+          buckets,
+          spend,
+          i === 0
+        );
         const findings = analysis.findings;
 
         const wb = agg(d.bw);

@@ -67,6 +67,16 @@ export interface TemporalPattern {
   consistency: number;
   batchCandidate: boolean;
   meanDaily: number;
+  // Share of total requests landing on the top-2 weekdays (0-1). High values
+  // mean a weekly cadence — a scheduled job, not interactive traffic.
+  weekdayConcentration?: number;
+  // Names of those dominant weekdays, set only when the cadence is real
+  // (the top weekday recurs on 3+ distinct dates). Drives rule reason text.
+  dominantWeekdays?: string[];
+  // Mean weekend volume as a share of mean weekday volume. ~1 means the
+  // workload runs flat through weekends (machine-driven, batchable);
+  // well below 1 means human-driven interactive traffic.
+  weekendParity?: number;
 }
 
 export interface AggregatedRow {

@@ -56,8 +56,11 @@ export const ANALYSIS_RULES = `
    breakpoint.
 
 5. BATCH API MIGRATION
-   When: bursty / spiky daily traffic (high coefficient of variation) or many
-   zero-usage days, and the work isn't latency-sensitive.
+   When: bursty / spiky daily traffic (high coefficient of variation), many
+   zero-usage days, a weekly cadence (volume concentrated on 1-2 weekdays —
+   a cron job), or steady high volume that runs flat through weekends — and
+   the work isn't latency-sensitive. Traffic that dips on weekends is
+   human-driven and usually NOT batchable.
    Action: move async work to the Batch API for ~50% input discount (≤24h turnaround).
 
 6. MODEL DOWNGRADE Opus→Sonnet (or premium→mid reasoning model)
