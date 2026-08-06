@@ -19,9 +19,13 @@ Built as part of Nick's Omilia internship; doubles as a portfolio project.
   (`src/lib/*/costing.ts`). Per-finding provenance (`rules` / `llm` / `both`),
   graceful degradation to rules-only when NIM is unavailable.
 - **Trust guarantees**: per-row savings capped at the row's spend, stamped
-  pricing-table date, ROI footer on AI-augmented reports, deterministic
-  8-workspace demo (`DEMO_SEED`).
-- 90 vitest tests pin the money math; CI runs type-check, lint, format, test.
+  pricing-table date, ROI footer on AI-augmented reports.
+- **Persona demo**: every "sample data" click generates a fresh org — a
+  sprawling enterprise (every rule fires, compounding growth arc, one
+  incident month) or a lean startup (1-2 minor findings, on purpose). Each
+  run is internally coherent across its 6 months; the generators are pure
+  and clock-free, reproducible via explicit seeds (`DEMO_SEED` in tests).
+- 96 vitest tests pin the money math; CI runs type-check, lint, format, test.
 - AGPL-3.0.
 
 ## Where it's headed

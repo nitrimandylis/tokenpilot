@@ -103,8 +103,11 @@ Pick a vendor, paste the key, click **Analyze**. Then browse findings by
 severity, spend by workspace, and history by month. The key is forgotten the
 moment you close the tab — TokenPilot has the memory of a goldfish, on purpose.
 
-No key handy? **Try with sample data** generates a seeded 8-workspace demo
-org — same org, same numbers, every single run. There's also a `mock-server/`
+No key handy? **Try with sample data** conjures a fresh fake org on every
+click — pick a sprawling enterprise (every rule fires, spend compounding
+month over month, one runaway-agent incident in the middle) or a lean startup
+(barely anything to fix, on purpose). Each run stays internally coherent:
+one org, one story, across all six months. There's also a `mock-server/`
 for developing without burning real API calls.
 
 ## 🔩 Under the hood
@@ -129,9 +132,9 @@ flowchart LR
 | ids       | ULID                          | sortable, unique, no coordination needed             |
 
 Pre-commit: Husky + lint-staged run Prettier on everything; commitlint guards
-the messages. A vitest suite (90 tests) pins the money math — every costing
-formula, the consensus merge, and demo determinism. Full architecture notes
-live in `CLAUDE.md`.
+the messages. A vitest suite (96 tests) pins the money math — every costing
+formula, the consensus merge, and the demo generators' purity. Full
+architecture notes live in `CLAUDE.md`.
 
 ```bash
 npm run dev          # dev server
