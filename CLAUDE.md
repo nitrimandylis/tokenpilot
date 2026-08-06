@@ -43,7 +43,9 @@ Aggregation (agg/aggOpenAI)
     └─ Consolidates usage buckets by model/key/workspace
     ↓
 Analysis Engine (findIssues/findIssuesOpenAI)
-    └─ Runs 6 optimization rules with confidence scoring
+    └─ Runs the vendor's rule set (7 Anthropic / 12 OpenAI) with confidence
+       scoring; optional NIM consensus merges LLM proposals on top, priced
+       by lib/{vendor}/costing.ts — the LLM never emits dollar figures
     ↓
 Report Generation + localStorage persistence
     └─ AnalysisRecord with ULID id, stored by month
@@ -114,7 +116,10 @@ Located in `lib/anthropic/analysis.ts` (381 lines) and `lib/openai/analysis.ts`:
 
 - `lib/storage.ts` - localStorage abstraction with ULID-based IDs
 - `lib/anthropic/api.ts` - Admin API client, rate limit handling, date range utilities
-- `lib/anthropic/analysis.ts` - 6-rule detection engine, confidence scoring
+- `lib/anthropic/analysis.ts` - 7-rule detection engine, confidence scoring
+- `lib/anthropic/costing.ts` - deterministic optimized-cost formulas per category (OpenAI parallel in `lib/openai/costing.ts`)
+- `lib/nim/analysis.ts` - NIM LLM proposals, deterministic pricing, consensus merge (`source: rules|llm|both`)
+- `lib/savingsCap.ts` - caps cumulative per-row savings at the row's spend, applied by every engine output
 - `lib/anthropic/pricing.ts` - Model pricing table, cost calculation (`tc()` function)
 - `lib/openai/*` - Parallel implementations for OpenAI
 - `lib/formatters.ts` - Currency (`$`) and percentage (`P`) formatters
