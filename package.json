@@ -18,7 +18,8 @@
     "format:check": "prettier --check \"**/*.{js,jsx,ts,tsx,json,css,md}\"",
     "test": "vitest run",
     "test:watch": "vitest",
-    "prepare": "husky"
+    "prepare": "husky",
+    "calibrate": "CALIBRATE=1 vitest run src/__tests__/calibration.sweep.test.ts --silent=false --disableConsoleIntercept"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx,json,css,md}": "prettier --write"
