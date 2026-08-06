@@ -376,11 +376,12 @@ describe("OpenAI costing functions vs rule engine", () => {
   it("costPromptTrim matches rule 8's optimized cost", () => {
     // Sized so only rule 8 (and the small rule-6 info) fires: inp under the
     // RAG and 4o-overkill gates, reqs under the steady-batch gate — otherwise
-    // those findings consume the per-row savings cap.
+    // those findings consume the per-row savings cap. 350 reqs puts avg input
+    // above rule 8's 12k signal now that confidence has no free signal.
     const r = oaiRow({
       inp: 4_800_000,
       out: 150_000,
-      reqs: 500,
+      reqs: 350,
       cost: 40,
     });
     const f = findIssuesOpenAI([r], []).find(

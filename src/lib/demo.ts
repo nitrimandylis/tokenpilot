@@ -635,12 +635,14 @@ const OAI_ENT_WORKLOADS: OaiCompletionsWorkload[] = [
     reqs: 30,
   },
   // Content studio: verbose 15k-token prompts → prompt bloat (rule 8).
+  // Volumes stay under rule 2's 10M/mo RAG gate even at max profile scale,
+  // so this reads as prompt bloat, not RAG territory (rule 8 defers there).
   {
     pid: "proj_content",
     model: "gpt-4o",
-    inp: 300_000,
-    out: 12_000,
-    reqs: 20,
+    inp: 120_000,
+    out: 4_000,
+    reqs: 8,
   },
   // Realtime assistant: big repeated context, no caching → caching (rule 0).
   {

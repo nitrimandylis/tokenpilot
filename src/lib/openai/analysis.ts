@@ -657,14 +657,18 @@ export function findIssuesOpenAI(
     }
 
     /* ─── RULE 8: Token Efficiency - Prompt Bloat ─── */
-    // Detect unnecessarily verbose prompts or inefficient formatting
-    if (hasTokenData && ai > 8000 && r.reqs > 100 && cur > 3) {
+    // Detect unnecessarily verbose prompts or inefficient formatting.
+    // Skips rows in rule 2's RAG territory: RAG bloat already prescribes the
+    // same input trim there, and a duplicate finding just fights it for the
+    // row's savings headroom (the calibration sweep caught rule 8 flaking on
+    // exactly those rows). No always-true signal — confidence must be earned.
+    const ragTerritory = ratio > 12 && r.inp > 10e6;
+    if (hasTokenData && !ragTerritory && ai > 8000 && r.reqs > 100 && cur > 3) {
       const signals: FindingSignal[] = [
-        { weight: 0.3, met: ai > 12000, label: "avg input > 12k tok" },
-        { weight: 0.25, met: ao < ai * 0.05, label: "output < 5% of input" },
+        { weight: 0.35, met: ai > 12000, label: "avg input > 12k tok" },
+        { weight: 0.3, met: ao < ai * 0.05, label: "output < 5% of input" },
         { weight: 0.2, met: r.reqs > 500, label: "500+ requests" },
         { weight: 0.15, met: ratio > 15, label: "in:out ratio > 15:1" },
-        { weight: 0.1, met: true, label: "verbose prompt pattern" },
       ];
       const conf = confidenceScore(signals);
       if (conf >= 0.5) {
