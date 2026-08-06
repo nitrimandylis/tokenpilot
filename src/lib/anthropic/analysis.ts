@@ -3,6 +3,7 @@
 import type {
   AggregatedRow,
   Finding,
+  FindingSignal,
   TemporalPattern,
   Workspace,
   UsageBucket,
@@ -234,7 +235,8 @@ export function findIssues(
       reason: string,
       action: string,
       severity: Finding["sev"],
-      confidence: number
+      confidence: number,
+      signals?: FindingSignal[]
     ) => {
       // Skip if this category was already added for this API key
       if (addedCategoriesByKey[keyId].has(category)) {
@@ -272,18 +274,23 @@ export function findIssues(
           activeDays: r.activeDays,
           temporal,
           source: "rules",
+          signals,
         });
       }
     };
 
     /* ─── RULE 1: Model Downgrade → Haiku ─── */
     if ((isO || isS) && ao > 0 && ao < 150 && r.reqs > 50) {
-      const signals = [
-        { weight: 0.3, met: ao < 80 },
-        { weight: 0.25, met: r.reqs > 500 },
-        { weight: 0.2, met: inputVariance !== "high" },
-        { weight: 0.15, met: ai < 2000 },
-        { weight: 0.1, met: r.activeDays > 20 },
+      const signals: FindingSignal[] = [
+        { weight: 0.3, met: ao < 80, label: "avg output < 80 tok" },
+        { weight: 0.25, met: r.reqs > 500, label: "500+ requests" },
+        {
+          weight: 0.2,
+          met: inputVariance !== "high",
+          label: "input not oversized",
+        },
+        { weight: 0.15, met: ai < 2000, label: "avg input < 2k tok" },
+        { weight: 0.1, met: r.activeDays > 20, label: "20+ active days" },
       ];
       const conf = confidenceScore(signals);
       if (conf >= 0.4) {
@@ -297,19 +304,20 @@ export function findIssues(
           reason,
           action,
           sev,
-          conf
+          conf,
+          signals
         );
       }
     }
 
     /* ─── RULE 2: RAG Context Bloat ─── */
     if (ratio > 12 && !isH && r.inp > 10e6) {
-      const signals = [
-        { weight: 0.3, met: ratio > 20 },
-        { weight: 0.25, met: ai > 8000 },
-        { weight: 0.2, met: ao < 500 },
-        { weight: 0.15, met: r.reqs > 100 },
-        { weight: 0.1, met: cr < 0.1 },
+      const signals: FindingSignal[] = [
+        { weight: 0.3, met: ratio > 20, label: "in:out ratio > 20:1" },
+        { weight: 0.25, met: ai > 8000, label: "avg input > 8k tok" },
+        { weight: 0.2, met: ao < 500, label: "avg output < 500 tok" },
+        { weight: 0.15, met: r.reqs > 100, label: "100+ requests" },
+        { weight: 0.1, met: cr < 0.1, label: "cache rate < 10%" },
       ];
       const conf = confidenceScore(signals);
       if (conf >= 0.4) {
@@ -324,18 +332,19 @@ export function findIssues(
           reason,
           action,
           sev,
-          conf
+          conf,
+          signals
         );
       }
     }
 
     /* ─── RULE 3: Prompt Caching Miss ─── */
     if (cr < 0.05 && r.inp > 20e6 && !isH) {
-      const signals = [
-        { weight: 0.35, met: cr < 0.01 },
-        { weight: 0.25, met: r.reqs > 200 },
-        { weight: 0.2, met: ai > 3000 },
-        { weight: 0.2, met: r.activeDays > 15 },
+      const signals: FindingSignal[] = [
+        { weight: 0.35, met: cr < 0.01, label: "≈0 cache reads" },
+        { weight: 0.25, met: r.reqs > 200, label: "200+ requests" },
+        { weight: 0.2, met: ai > 3000, label: "avg input > 3k tok" },
+        { weight: 0.2, met: r.activeDays > 15, label: "15+ active days" },
       ];
       const conf = confidenceScore(signals);
       if (conf >= 0.4) {
@@ -349,19 +358,20 @@ export function findIssues(
           reason,
           action,
           sev,
-          conf
+          conf,
+          signals
         );
       }
     }
 
     /* ─── RULE 4: Opus Overkill → Sonnet ─── */
     if (isO && ao >= 150 && r.inp > 5e6) {
-      const signals = [
-        { weight: 0.3, met: ao < 1500 },
-        { weight: 0.25, met: r.reqs > 100 },
-        { weight: 0.2, met: ratio < 10 },
-        { weight: 0.15, met: ai < 10000 },
-        { weight: 0.1, met: r.activeDays > 15 },
+      const signals: FindingSignal[] = [
+        { weight: 0.3, met: ao < 1500, label: "avg output < 1.5k tok" },
+        { weight: 0.25, met: r.reqs > 100, label: "100+ requests" },
+        { weight: 0.2, met: ratio < 10, label: "in:out ratio < 10:1" },
+        { weight: 0.15, met: ai < 10000, label: "avg input < 10k tok" },
+        { weight: 0.1, met: r.activeDays > 15, label: "15+ active days" },
       ];
       const conf = confidenceScore(signals);
       if (conf >= 0.4) {
@@ -375,18 +385,23 @@ export function findIssues(
           reason,
           action,
           sev,
-          conf
+          conf,
+          signals
         );
       }
     }
 
     /* ─── RULE 5: Batch API Candidate ─── */
     if (temporal.batchCandidate && r.reqs > 200 && cur > 5) {
-      const signals = [
-        { weight: 0.35, met: temporal.burstiness > 1.5 },
-        { weight: 0.25, met: r.reqs > 500 },
-        { weight: 0.2, met: !isH },
-        { weight: 0.2, met: r.activeDays < 25 },
+      const signals: FindingSignal[] = [
+        {
+          weight: 0.35,
+          met: temporal.burstiness > 1.5,
+          label: "high burstiness (CoV > 1.5)",
+        },
+        { weight: 0.25, met: r.reqs > 500, label: "500+ requests" },
+        { weight: 0.2, met: !isH, label: "premium-tier model" },
+        { weight: 0.2, met: r.activeDays < 25, label: "< 25 active days" },
       ];
       const conf = confidenceScore(signals);
       if (conf >= 0.4) {
@@ -400,7 +415,8 @@ export function findIssues(
           reason,
           action,
           sev,
-          conf
+          conf,
+          signals
         );
       }
     }

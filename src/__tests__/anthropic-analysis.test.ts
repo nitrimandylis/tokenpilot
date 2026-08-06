@@ -374,6 +374,26 @@ describe("findIssues", () => {
     }
   });
 
+  it("stores labeled detection signals on rule findings", () => {
+    const day = (n: number) => `2024-01-${String(n).padStart(2, "0")}`;
+    const buckets = Array.from({ length: 25 }, (_, i) =>
+      sonnetBucket(day(i + 1), 500_000, 60_000, 800)
+    );
+    const rows = agg(buckets);
+    const downgrade = findIssues(rows, [], buckets).find(
+      (f) => f.cat === "Model Downgrade → Haiku"
+    );
+    expect(downgrade).toBeDefined();
+    expect(downgrade!.source).toBe("rules");
+    expect(downgrade!.signals!.length).toBeGreaterThan(0);
+    for (const s of downgrade!.signals!) {
+      expect(s.label).toBeTruthy();
+      expect(typeof s.met).toBe("boolean");
+      expect(s.weight).toBeGreaterThan(0);
+    }
+    expect(downgrade!.signals!.some((s) => s.met)).toBe(true);
+  });
+
   it("savings are positive and less than current cost", () => {
     const day = (n: number) => `2024-01-${String(n).padStart(2, "0")}`;
     const buckets = Array.from({ length: 25 }, (_, i) =>

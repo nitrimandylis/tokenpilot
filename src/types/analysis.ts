@@ -87,6 +87,14 @@ export interface AggregatedRow {
 // runs existed still parse.
 export type FindingSource = "rules" | "llm" | "both";
 
+// One detection signal behind a rule finding: its confidence weight, whether
+// the row met it, and a short human-readable label for the "Based on:" trail.
+export interface FindingSignal {
+  weight: number;
+  met: boolean;
+  label: string;
+}
+
 export interface Finding {
   id: string;
   name: string;
@@ -113,6 +121,7 @@ export interface Finding {
   activeDays: number;
   temporal: TemporalPattern;
   source?: FindingSource;
+  signals?: FindingSignal[];
 }
 
 export interface WorkspaceSpend {

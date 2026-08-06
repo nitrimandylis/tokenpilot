@@ -189,6 +189,56 @@ function Row({ f, open, toggle, vendor, index }: RowProps) {
                 this pattern
               </div>
 
+              {/* Provenance + detection signal trail */}
+              {(f.source === "llm" ||
+                f.source === "both" ||
+                (f.signals && f.signals.length > 0)) && (
+                <div className="rounded-lg border border-ink-border bg-ink p-4 space-y-2.5">
+                  {f.source === "llm" && (
+                    <p className="text-[11px] font-mono text-info">
+                      Spotted by AI · priced deterministically from your usage
+                      data
+                    </p>
+                  )}
+                  {f.source === "both" && (
+                    <p className="text-[11px] font-mono text-moss-light">
+                      ✓ Confirmed by AI
+                    </p>
+                  )}
+                  {f.signals && f.signals.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-bone-subtle mb-1.5">
+                        Based on:
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {f.signals.map((s, i) => (
+                          <span
+                            key={i}
+                            className={`px-2 py-0.5 rounded-full border text-[10px] font-mono ${
+                              s.met
+                                ? "border-moss/30 bg-moss/10 text-moss-light"
+                                : "border-ink-border text-bone-subtle/40"
+                            }`}
+                            title={`signal weight ${Math.round(s.weight * 100)}% · ${
+                              s.met ? "met" : "not met"
+                            }`}
+                          >
+                            {s.met ? "✓" : "○"} {s.label}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {f.source === "llm" && (
+                    <p className="text-[11px] text-bone-subtle">
+                      Priced from this row&apos;s data: {T(f.inp)} input ·{" "}
+                      {T(f.out)} output tokens · {f.reqs.toLocaleString()}{" "}
+                      requests · {$(f.cur)}/mo current cost
+                    </p>
+                  )}
+                </div>
+              )}
+
               {/* Solution sections */}
               <div className="space-y-3">
                 {/* ========== ANTHROPIC SOLUTIONS ========== */}

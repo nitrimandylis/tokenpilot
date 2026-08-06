@@ -1,6 +1,6 @@
 /* ═══════════════════ OpenAI ANALYSIS ENGINE ═══════════════════ */
 
-import type { Finding } from "@/types";
+import type { Finding, FindingSignal } from "@/types";
 import { OpenAICategory, Severity } from "@/types/analysis";
 import { prOpenAI, tcOpenAI } from "./pricing";
 import {
@@ -256,7 +256,8 @@ export function findIssuesOpenAI(
       action: string,
       severity: Severity,
       confidence: number,
-      impact?: string
+      impact?: string,
+      signals?: FindingSignal[]
     ) => {
       // Skip if this category was already added for this model
       if (addedCategories.has(category)) {
@@ -303,6 +304,7 @@ export function findIssuesOpenAI(
             meanDaily: r.activeDays > 0 ? r.reqs / r.activeDays : 0,
           },
           source: "rules",
+          signals,
         });
       }
     };
@@ -352,12 +354,12 @@ export function findIssuesOpenAI(
     // Detect patterns where prompt caching could save costs
     // Large, consistent input + many requests = prime candidate
     if (hasTokenData && ai > 2000 && r.reqs > 100 && r.inp > 5e6) {
-      const signals = [
-        { weight: 0.3, met: ai > 5000 }, // Large prompts
-        { weight: 0.25, met: r.reqs > 500 }, // High volume
-        { weight: 0.2, met: ratio > 3 }, // Input-heavy
-        { weight: 0.15, met: r.activeDays > 15 }, // Sustained usage
-        { weight: 0.1, met: !isGPT4OMini }, // Higher-tier model
+      const signals: FindingSignal[] = [
+        { weight: 0.3, met: ai > 5000, label: "avg input > 5k tok" },
+        { weight: 0.25, met: r.reqs > 500, label: "500+ requests" },
+        { weight: 0.2, met: ratio > 3, label: "input-heavy (ratio > 3:1)" },
+        { weight: 0.15, met: r.activeDays > 15, label: "15+ active days" },
+        { weight: 0.1, met: !isGPT4OMini, label: "higher-tier model" },
       ];
       const conf = confidenceScore(signals);
       if (conf >= 0.45) {
@@ -375,7 +377,8 @@ export function findIssuesOpenAI(
           action,
           sev,
           conf,
-          impact
+          impact,
+          signals
         );
       }
     }
@@ -388,12 +391,12 @@ export function findIssuesOpenAI(
       ao < 200 &&
       r.reqs > 50
     ) {
-      const signals = [
-        { weight: 0.3, met: ao < 100 },
-        { weight: 0.25, met: r.reqs > 500 },
-        { weight: 0.2, met: ai < 3000 },
-        { weight: 0.15, met: ai < 2000 },
-        { weight: 0.1, met: r.activeDays > 20 },
+      const signals: FindingSignal[] = [
+        { weight: 0.3, met: ao < 100, label: "avg output < 100 tok" },
+        { weight: 0.25, met: r.reqs > 500, label: "500+ requests" },
+        { weight: 0.2, met: ai < 3000, label: "avg input < 3k tok" },
+        { weight: 0.15, met: ai < 2000, label: "avg input < 2k tok" },
+        { weight: 0.1, met: r.activeDays > 20, label: "20+ active days" },
       ];
       const conf = confidenceScore(signals);
       if (conf >= 0.4) {
@@ -407,19 +410,21 @@ export function findIssuesOpenAI(
           reason,
           action,
           sev,
-          conf
+          conf,
+          undefined,
+          signals
         );
       }
     }
 
     /* ─── RULE 2: RAG Context Bloat ─── */
     if (hasTokenData && ratio > 12 && !isGPT4OMini && r.inp > 10e6) {
-      const signals = [
-        { weight: 0.3, met: ratio > 20 },
-        { weight: 0.25, met: ai > 8000 },
-        { weight: 0.2, met: ao < 500 },
-        { weight: 0.15, met: r.reqs > 100 },
-        { weight: 0.1, met: true },
+      const signals: FindingSignal[] = [
+        { weight: 0.3, met: ratio > 20, label: "in:out ratio > 20:1" },
+        { weight: 0.25, met: ai > 8000, label: "avg input > 8k tok" },
+        { weight: 0.2, met: ao < 500, label: "avg output < 500 tok" },
+        { weight: 0.15, met: r.reqs > 100, label: "100+ requests" },
+        { weight: 0.1, met: true, label: "input-dominant workload" },
       ];
       const conf = confidenceScore(signals);
       if (conf >= 0.4) {
@@ -434,19 +439,21 @@ export function findIssuesOpenAI(
           reason,
           action,
           sev,
-          conf
+          conf,
+          undefined,
+          signals
         );
       }
     }
 
     /* ─── RULE 3: GPT-4o Overkill → GPT-4o-mini ─── */
     if (hasTokenData && isGPT4O && ao >= 200 && r.inp > 5e6) {
-      const signals = [
-        { weight: 0.3, met: ao < 1500 },
-        { weight: 0.25, met: r.reqs > 100 },
-        { weight: 0.2, met: ratio < 10 },
-        { weight: 0.15, met: ai < 10000 },
-        { weight: 0.1, met: r.activeDays > 15 },
+      const signals: FindingSignal[] = [
+        { weight: 0.3, met: ao < 1500, label: "avg output < 1.5k tok" },
+        { weight: 0.25, met: r.reqs > 100, label: "100+ requests" },
+        { weight: 0.2, met: ratio < 10, label: "in:out ratio < 10:1" },
+        { weight: 0.15, met: ai < 10000, label: "avg input < 10k tok" },
+        { weight: 0.1, met: r.activeDays > 15, label: "15+ active days" },
       ];
       const conf = confidenceScore(signals);
       if (conf >= 0.4) {
@@ -460,7 +467,9 @@ export function findIssuesOpenAI(
           reason,
           action,
           sev,
-          conf
+          conf,
+          undefined,
+          signals
         );
       }
     }
@@ -474,11 +483,11 @@ export function findIssuesOpenAI(
       const bursty = avgDaily > 100 && r.activeDays < 25;
 
       if (bursty) {
-        const signals = [
-          { weight: 0.35, met: avgDaily > 200 },
-          { weight: 0.25, met: r.reqs > 500 },
-          { weight: 0.2, met: !isGPT4OMini },
-          { weight: 0.2, met: r.activeDays < 25 },
+        const signals: FindingSignal[] = [
+          { weight: 0.35, met: avgDaily > 200, label: "200+ reqs/day" },
+          { weight: 0.25, met: r.reqs > 500, label: "500+ requests" },
+          { weight: 0.2, met: !isGPT4OMini, label: "higher-tier model" },
+          { weight: 0.2, met: r.activeDays < 25, label: "< 25 active days" },
         ];
         const conf = confidenceScore(signals);
         if (conf >= 0.4) {
@@ -492,7 +501,9 @@ export function findIssuesOpenAI(
             reason,
             action,
             sev,
-            conf
+            conf,
+            undefined,
+            signals
           );
         }
       }
@@ -508,11 +519,11 @@ export function findIssuesOpenAI(
       r.activeDays >= 20
     ) {
       const avgDaily = r.reqs / r.activeDays;
-      const signals = [
-        { weight: 0.4, met: cur > 80 },
-        { weight: 0.3, met: r.reqs > 5000 },
-        { weight: 0.2, met: !isGPT4OMini },
-        { weight: 0.1, met: avgDaily < 2000 },
+      const signals: FindingSignal[] = [
+        { weight: 0.4, met: cur > 80, label: "spend > $80/mo" },
+        { weight: 0.3, met: r.reqs > 5000, label: "5k+ requests" },
+        { weight: 0.2, met: !isGPT4OMini, label: "higher-tier model" },
+        { weight: 0.1, met: avgDaily < 2000, label: "steady daily volume" },
       ];
       const conf = confidenceScore(signals);
       if (conf >= 0.4) {
@@ -526,7 +537,9 @@ export function findIssuesOpenAI(
           reason,
           action,
           sev,
-          conf
+          conf,
+          undefined,
+          signals
         );
       }
     }
@@ -539,12 +552,12 @@ export function findIssuesOpenAI(
         r.model.toLowerCase().includes("o3")) &&
       r.reqs > 50
     ) {
-      const signals = [
-        { weight: 0.35, met: ao < 500 }, // Short outputs suggest simple tasks
-        { weight: 0.25, met: ai < 5000 }, // Short inputs suggest simple prompts
-        { weight: 0.2, met: r.reqs > 200 }, // High volume
-        { weight: 0.15, met: ratio < 8 }, // Not context-heavy
-        { weight: 0.05, met: cur > 10 }, // Significant spend
+      const signals: FindingSignal[] = [
+        { weight: 0.35, met: ao < 500, label: "avg output < 500 tok" },
+        { weight: 0.25, met: ai < 5000, label: "avg input < 5k tok" },
+        { weight: 0.2, met: r.reqs > 200, label: "200+ requests" },
+        { weight: 0.15, met: ratio < 8, label: "not context-heavy" },
+        { weight: 0.05, met: cur > 10, label: "spend > $10/mo" },
       ];
       const conf = confidenceScore(signals);
       if (conf >= 0.5) {
@@ -558,7 +571,9 @@ export function findIssuesOpenAI(
           reason,
           action,
           sev,
-          conf
+          conf,
+          undefined,
+          signals
         );
       }
     }
@@ -586,12 +601,12 @@ export function findIssuesOpenAI(
     /* ─── RULE 8: Token Efficiency - Prompt Bloat ─── */
     // Detect unnecessarily verbose prompts or inefficient formatting
     if (hasTokenData && ai > 8000 && r.reqs > 100 && cur > 3) {
-      const signals = [
-        { weight: 0.3, met: ai > 12000 }, // Very large inputs
-        { weight: 0.25, met: ao < ai * 0.05 }, // Output is tiny compared to input
-        { weight: 0.2, met: r.reqs > 500 }, // High volume amplifies waste
-        { weight: 0.15, met: ratio > 15 }, // Extreme input/output ratio
-        { weight: 0.1, met: true },
+      const signals: FindingSignal[] = [
+        { weight: 0.3, met: ai > 12000, label: "avg input > 12k tok" },
+        { weight: 0.25, met: ao < ai * 0.05, label: "output < 5% of input" },
+        { weight: 0.2, met: r.reqs > 500, label: "500+ requests" },
+        { weight: 0.15, met: ratio > 15, label: "in:out ratio > 15:1" },
+        { weight: 0.1, met: true, label: "verbose prompt pattern" },
       ];
       const conf = confidenceScore(signals);
       if (conf >= 0.5) {
@@ -606,7 +621,9 @@ export function findIssuesOpenAI(
           reason,
           action,
           sev,
-          conf
+          conf,
+          undefined,
+          signals
         );
       }
     }
@@ -614,12 +631,12 @@ export function findIssuesOpenAI(
     /* ─── RULE 7: GPT-4 Legacy → GPT-4o Upgrade ─── */
     // Detect old GPT-4 models that should upgrade to GPT-4o
     if (hasTokenData && isGPT4 && r.reqs > 50 && cur > 2) {
-      const signals = [
-        { weight: 0.3, met: r.reqs > 100 },
-        { weight: 0.25, met: cur > 5 },
-        { weight: 0.2, met: r.activeDays > 3 },
-        { weight: 0.15, met: true }, // Always recommend upgrading from legacy GPT-4
-        { weight: 0.1, met: ao < 500 },
+      const signals: FindingSignal[] = [
+        { weight: 0.3, met: r.reqs > 100, label: "100+ requests" },
+        { weight: 0.25, met: cur > 5, label: "spend > $5/mo" },
+        { weight: 0.2, met: r.activeDays > 3, label: "3+ active days" },
+        { weight: 0.15, met: true, label: "legacy GPT-4 in use" },
+        { weight: 0.1, met: ao < 500, label: "avg output < 500 tok" },
       ];
       const conf = confidenceScore(signals);
       if (conf >= 0.4) {
@@ -633,7 +650,9 @@ export function findIssuesOpenAI(
           reason,
           action,
           sev,
-          conf
+          conf,
+          undefined,
+          signals
         );
       }
     }
