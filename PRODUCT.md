@@ -36,17 +36,16 @@ Next candidates, in rough order (none committed):
    responses; needs a real key and a real llama round-trip. The demo now
    makes exactly one NIM call per run (current month only), so it doubles
    as the cheapest live test.
-2. **Confidence calibration** — the measuring half shipped (`npm run
-calibrate`: seed-sweeps both engines, persistence-under-noise vs
-   confidence). First run flagged OpenAI rule 8 (Prompt Optimization) as
-   overconfident: 0.98 mean confidence, 81% persistence. The retune of that
-   rule's signals is the remaining work.
-3. **Cross-vendor comparison** — both pricing tables are in the repo; "this
+2. **Cross-vendor comparison** — both pricing tables are in the repo; "this
    workload on the other vendor" is a finding single-vendor tools can't make.
 
 Shipped from this list 2026-08-06: temporal/scheduling rules (weekly-cadence
 5d/4c, steady-batch 5c with a weekend-parity gate that keeps batch advice off
-interactive traffic).
+interactive traffic), and confidence calibration — `npm run calibrate`
+seed-sweeps both engines measuring persistence-under-noise vs confidence;
+its first run caught OpenAI rule 8 overconfident (0.98 conf, 81% persistence)
+and the retune (no free signal, defer to RAG in rule 2's territory) brought
+it to 0.81 conf, 100% persistence. Both engines now calibrate clean.
 
 Explicitly cut (do not revive without a reason): token literacy score,
 conversational drill-down, history/analytics investment beyond what exists.
