@@ -20,6 +20,10 @@ _an LLM spend auditor that reads your Admin API and tells you where the money le
 ![engine](https://img.shields.io/badge/AI_augmentation-detects%2C_never_prices-3fb950?style=flat-square&labelColor=111111)
 ![savings](<https://img.shields.io/badge/savings-real._(your_CFO_may_weep)-3fb950?style=flat-square&labelColor=111111>)
 
+<br>
+
+<img src="docs/homepage.png" alt="TokenPilot — paste a read-only Admin API key, or try it with sample data" width="900">
+
 </div>
 
 ---
@@ -109,6 +113,16 @@ month over month, one runaway-agent incident in the middle) or a lean startup
 (barely anything to fix, on purpose). Each run stays internally coherent:
 one org, one story, across all six months. There's also a `mock-server/`
 for developing without burning real API calls.
+
+Either route lands you here — the headline number, the month's spend against
+what's recoverable, then every finding ranked by dollars with a confidence
+score attached:
+
+<div align="center">
+
+<img src="docs/report.png" alt="A TokenPilot report: $1188/mo recoverable out of $3.23K spend, with ten confidence-scored findings" width="900">
+
+</div>
 
 ## 🔩 Under the hood
 
