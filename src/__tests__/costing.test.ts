@@ -331,7 +331,24 @@ describe("OpenAI costing functions vs rule engine", () => {
   });
 
   it("costEnableCachingOpenAI matches rule 0's optimized cost", () => {
-    const r = oaiRow({ inp: 10_000_000, out: 2_000_000, reqs: 2000, cost: 60 });
+    // Mini row on purpose. Rule 0 needs inp > 5M, and on a GPT-4o row that
+    // same volume always attracts a mini-downgrade finding (rule 1 when
+    // ao < 200, rule 3 otherwise) which takes the per-row cap's headroom
+    // first and clamps this one. Rules 1 and 3 both skip mini rows, so this
+    // is the only way to isolate rule 0.
+    // cost 0 so `cur` comes from the table: rule 0's saving is computed from
+    // table input cost, and pinning an arbitrary billed figure against cheap
+    // mini tokens pushed the saving under addFinding's $0.50 floor. ai is
+    // 7k — over rule 0's 5k signal, under rule 8's 8k gate, so prompt-bloat
+    // doesn't compete for the row's headroom.
+    const r = oaiRow({
+      model: "gpt-4o-mini",
+      line_item: "GPT-4o mini",
+      inp: 60_000_000,
+      out: 6_000_000,
+      reqs: 8600,
+      cost: 0,
+    });
     const f = findIssuesOpenAI([r], []).find(
       (x) => x.cat === OpenAICategory.PROMPT_CACHING
     );
@@ -340,7 +357,11 @@ describe("OpenAI costing functions vs rule engine", () => {
   });
 
   it("costBatchDiscountOpenAI matches the batch rules (50% off)", () => {
+    // Mini row for the same reason as the caching test above: ao here is 100,
+    // so a GPT-4o row would pull in rule 1's mini downgrade and clamp this.
     const r = oaiRow({
+      model: "gpt-4o-mini",
+      line_item: "GPT-4o mini",
       inp: 30_000_000,
       out: 3_000_000,
       reqs: 30_000,

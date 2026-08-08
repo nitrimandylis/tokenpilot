@@ -256,6 +256,10 @@ export function findIssuesOpenAI(
       r.model.toLowerCase().includes("gpt-4") &&
       !r.model.toLowerCase().includes("gpt-4o");
 
+    // Rule 2's gate. Rules 3 and 8 both defer to it on these rows so their
+    // remedies don't compete with RAG bloat for the per-row savings cap.
+    const ragTerritory = ratio > 12 && r.inp > 10e6;
+
     // Track categories already added for this model to prevent duplicates
     const addedCategories = new Set<OpenAICategory>();
 
@@ -458,7 +462,23 @@ export function findIssuesOpenAI(
     }
 
     /* ─── RULE 3: GPT-4o Overkill → GPT-4o-mini ─── */
-    if (hasTokenData && isGPT4O && ao >= 200 && r.inp > 5e6) {
+    // Two deferrals, both forced by mini's real price. Correctly resolved,
+    // mini is ~94% cheaper than GPT-4o, so this rule outbids every other
+    // finding for the per-row savings cap and starves them. It only earns
+    // that on rows where mini genuinely performs comparably:
+    //   - not RAG territory (rule 2 owns those; the fix is retrieval)
+    //   - avg input under 10k tok (rule 8 owns the bloated ones; a request
+    //     carrying 15k tokens of context is not a simple classification task)
+    // `ai < 10000` was already a confidence signal here; at real pricing it
+    // has to be a gate.
+    if (
+      hasTokenData &&
+      isGPT4O &&
+      ao >= 200 &&
+      r.inp > 5e6 &&
+      !ragTerritory &&
+      ai < 10000
+    ) {
       const signals: FindingSignal[] = [
         { weight: 0.3, met: ao < 1500, label: "avg output < 1.5k tok" },
         { weight: 0.25, met: r.reqs > 100, label: "100+ requests" },
@@ -662,7 +682,6 @@ export function findIssuesOpenAI(
     // same input trim there, and a duplicate finding just fights it for the
     // row's savings headroom (the calibration sweep caught rule 8 flaking on
     // exactly those rows). No always-true signal — confidence must be earned.
-    const ragTerritory = ratio > 12 && r.inp > 10e6;
     if (hasTokenData && !ragTerritory && ai > 8000 && r.reqs > 100 && cur > 3) {
       const signals: FindingSignal[] = [
         { weight: 0.35, met: ai > 12000, label: "avg input > 12k tok" },
