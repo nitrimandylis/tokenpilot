@@ -61,6 +61,17 @@ export const MP_OPENAI: Record<string, PricingInfo> = {
 };
 
 /**
+ * Model keys longest-first. Lookup is a substring test, and several keys are
+ * prefixes of others ("gpt-4o" of "gpt-4o-mini", "o1" of "o1-mini", "gpt-4" of
+ * "gpt-4-32k"). Insertion order matched the prefix first, so every "-mini"
+ * variant priced as its full-size parent — gpt-4o-mini at $2.50/$10 instead of
+ * $0.15/$0.60. Longest match wins, so the most specific key always answers.
+ */
+const MP_OPENAI_KEYS = Object.keys(MP_OPENAI).sort(
+  (a, b) => b.length - a.length
+);
+
+/**
  * Get pricing information for a given OpenAI model string
  * @param m - Model name/identifier (e.g., "gpt-4o", "gpt-4o-mini")
  * @returns PricingInfo object with input/output costs and metadata
@@ -70,20 +81,13 @@ export function prOpenAI(m: string | undefined): PricingInfo {
     return { i: 2.5, o: 10, l: m || "unknown", t: OpenAIModelTier.GPT4O, g: 0 };
   const k = m.toLowerCase();
 
-  // Exact match first
-  for (const [key, v] of Object.entries(MP_OPENAI)) {
-    if (k.includes(key)) return v;
+  // Most specific key first
+  for (const key of MP_OPENAI_KEYS) {
+    if (k.includes(key)) return MP_OPENAI[key];
   }
 
-  // Fuzzy matching
-  if (k.includes("gpt-4o-mini")) return MP_OPENAI["gpt-4o-mini"];
-  if (k.includes("gpt-4o")) return MP_OPENAI["gpt-4o"];
-  if (k.includes("o3-mini")) return MP_OPENAI["o3-mini"];
-  if (k.includes("o3")) return MP_OPENAI["o3"];
-  if (k.includes("o1-mini")) return MP_OPENAI["o1-mini"];
-  if (k.includes("o1")) return MP_OPENAI["o1"];
-  if (k.includes("gpt-4-turbo")) return MP_OPENAI["gpt-4-turbo"];
-  if (k.includes("gpt-4")) return MP_OPENAI["gpt-4"];
+  // "gpt-3.5" is the one alias that is not itself a key (the key is
+  // "gpt-3.5-turbo"), so a bare "gpt-3.5-*" id still needs catching.
   if (k.includes("gpt-3.5")) return MP_OPENAI["gpt-3.5-turbo"];
 
   // Default to GPT-4o

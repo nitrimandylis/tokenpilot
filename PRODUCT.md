@@ -25,8 +25,19 @@ Built as part of Nick's Omilia internship; doubles as a portfolio project.
   incident month) or a lean startup (1-2 minor findings, on purpose). Each
   run is internally coherent across its 6 months; the generators are pure
   and clock-free, reproducible via explicit seeds (`DEMO_SEED` in tests).
-- 96 vitest tests pin the money math; CI runs type-check, lint, format, test.
+- 117 vitest tests pin the money math; CI runs type-check, lint, format, test.
 - AGPL-3.0.
+
+Corrected 2026-08-08: `prOpenAI` matched pricing-table keys in insertion
+order, so every "-mini" variant resolved to its full-size parent —
+`gpt-4o-mini` billed at GPT-4o's $2.50/$10 rather than $0.15/$0.60. The
+consequence was not just mispricing: `costMiniDowngrade` returned a GPT-4o
+row's own cost, so "Model Downgrade → GPT-4o-mini" computed zero savings and
+was dropped by the $0.50 floor, silently disabling the engine's headline
+OpenAI recommendation on the commonest OpenAI workload. Longest key now wins.
+Rule 3 gained two deferrals (RAG territory, and avg input ≥ 10k tok) because
+at mini's real price it outbid every other finding for the per-row savings
+cap; the startup demo persona's volumes were re-sized against real pricing.
 
 ## Where it's headed
 

@@ -656,21 +656,25 @@ const OAI_ENT_WORKLOADS: OaiCompletionsWorkload[] = [
 
 const OAI_STARTUP_WORKLOADS: OaiCompletionsWorkload[] = [
   // Product API: right-sized on mini, but repeated context isn't cached —
-  // the run's one deliberate (small) finding.
+  // the run's one deliberate (small) finding. Volumes are sized against real
+  // mini pricing ($0.15/$0.60): they were originally set when prOpenAI
+  // mis-resolved "gpt-4o-mini" to GPT-4o rates, which inflated this project's
+  // spend ~17x and made a sub-dollar caching saving look like a real one.
   {
     pid: "proj_app",
     model: "gpt-4o-mini",
-    inp: 250_000,
-    out: 40_000,
-    reqs: 100,
+    inp: 2_600_000,
+    out: 400_000,
+    reqs: 1_000,
   },
-  // Internal tools: small and clean.
+  // Internal tools: small and clean. Avg input stays ~250 tok/req, well under
+  // the caching rule's 2k gate, so this project keeps producing no findings.
   {
     pid: "proj_tools",
     model: "gpt-4o-mini",
-    inp: 20_000,
-    out: 5_000,
-    reqs: 80,
+    inp: 200_000,
+    out: 50_000,
+    reqs: 800,
   },
 ];
 
