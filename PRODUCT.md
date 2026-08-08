@@ -25,7 +25,7 @@ Built as part of Nick's Omilia internship; doubles as a portfolio project.
   incident month) or a lean startup (1-2 minor findings, on purpose). Each
   run is internally coherent across its 6 months; the generators are pure
   and clock-free, reproducible via explicit seeds (`DEMO_SEED` in tests).
-- 124 vitest tests pin the money math; CI runs type-check, lint, format, test.
+- 138 vitest tests pin the money math; CI runs type-check, lint, format, test.
 - AGPL-3.0.
 
 Corrected 2026-08-08: `prOpenAI` matched pricing-table keys in insertion
