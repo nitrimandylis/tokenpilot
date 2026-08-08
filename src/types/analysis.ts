@@ -36,6 +36,7 @@ export enum AnthropicCategory {
   BATCH_API_MIGRATION = "Batch API Migration",
   MODEL_UPGRADE = "Model Upgrade",
   WORKSPACE_ORGANIZATION = "Workspace Organization",
+  CROSS_VENDOR_COMPARISON = "Cross-Vendor Comparison",
 }
 
 export enum OpenAICategory {
@@ -49,6 +50,7 @@ export enum OpenAICategory {
   REASONING_MODEL_OVERKILL = "Reasoning Model Overkill",
   HIGH_IMPACT_OPPORTUNITY = "High-Impact Opportunity",
   PROJECT_ORGANIZATION = "Project Organization",
+  CROSS_VENDOR_COMPARISON = "Cross-Vendor Comparison",
 }
 
 // Backward compatibility

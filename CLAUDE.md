@@ -43,7 +43,7 @@ Aggregation (agg/aggOpenAI)
     └─ Consolidates usage buckets by model/key/workspace
     ↓
 Analysis Engine (findIssues/findIssuesOpenAI)
-    └─ Runs the vendor's rule set (9 Anthropic / 13 OpenAI) with confidence
+    └─ Runs the vendor's rule set (10 Anthropic / 14 OpenAI) with confidence
        scoring; optional NIM consensus merges LLM proposals on top, priced
        by lib/{vendor}/costing.ts — the LLM never emits dollar figures
     ↓
@@ -78,7 +78,7 @@ History page → Detail routes → /recommendations, /analytics, /raw-data
 - Service-level analytics: tracks spending by service type (embeddings, completions, audio, images, etc.)
 - Per-project service breakdown charts showing monthly usage across all services
 
-### Analysis Engine (22 rules: 9 Anthropic, 13 OpenAI)
+### Analysis Engine (24 rules: 10 Anthropic, 14 OpenAI)
 
 Located in `lib/anthropic/analysis.ts` and `lib/openai/analysis.ts` — the
 `RULE n:` comment headers in those files are the authoritative list. The core
@@ -110,6 +110,12 @@ categories:
 6. **Legacy Model** (Anthropic only)
    - Outdated generation (g=1) still in use
 
+7. **Cross-Vendor Comparison** (both vendors, one org-level finding per report)
+   - Reprices the whole org on the other vendor's nearest-equivalent tiers
+   - Both sides priced from the pricing tables (never OpenAI's billed `r.cost`)
+   - Always INFO, always `sav: 0` — never contributes to report savings
+   - Gated off below $50/mo org spend or a delta under 10% of that spend
+
 **Confidence Scoring:** Multi-signal weighted system (0-1 scale)
 
 - Signals: usage volume, consistency (CoV), active days, input variance, temporal patterns
@@ -126,6 +132,7 @@ categories:
 - `lib/anthropic/costing.ts` - deterministic optimized-cost formulas per category (OpenAI parallel in `lib/openai/costing.ts`)
 - `lib/nim/analysis.ts` - NIM LLM proposals, deterministic pricing, consensus merge (`source: rules|llm|both`)
 - `lib/savingsCap.ts` - caps cumulative per-row savings at the row's spend, applied by every engine output
+- `lib/crossVendor.ts` - cross-vendor tier mapping + comparison math, imported by both engines (rules-only, never NIM)
 - `lib/anthropic/pricing.ts` - Model pricing table, cost calculation (`tc()` function)
 - `lib/openai/*` - Parallel implementations for OpenAI
 - `lib/formatters.ts` - Currency (`$`) and percentage (`P`) formatters

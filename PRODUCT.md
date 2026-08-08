@@ -11,7 +11,7 @@ Built as part of Nick's Omilia internship; doubles as a portfolio project.
 
 ## Where it stands (2026-08-06)
 
-- **22 detection rules** (9 Anthropic, 13 OpenAI) with weighted-signal
+- **24 detection rules** (10 Anthropic, 14 OpenAI) with weighted-signal
   confidence scoring and per-finding signal trails.
 - **Consensus engine**: optional NVIDIA NIM augmentation runs alongside the
   rules, proposes findings from a fixed category set, and never prices —
@@ -25,7 +25,7 @@ Built as part of Nick's Omilia internship; doubles as a portfolio project.
   incident month) or a lean startup (1-2 minor findings, on purpose). Each
   run is internally coherent across its 6 months; the generators are pure
   and clock-free, reproducible via explicit seeds (`DEMO_SEED` in tests).
-- 117 vitest tests pin the money math; CI runs type-check, lint, format, test.
+- 138 vitest tests pin the money math; CI runs type-check, lint, format, test.
 - AGPL-3.0.
 
 Corrected 2026-08-08: `prOpenAI` matched pricing-table keys in insertion
@@ -47,8 +47,13 @@ Next candidates, in rough order (none committed):
    responses; needs a real key and a real llama round-trip. The demo now
    makes exactly one NIM call per run (current month only), so it doubles
    as the cheapest live test.
-2. **Cross-vendor comparison** — both pricing tables are in the repo; "this
-   workload on the other vendor" is a finding single-vendor tools can't make.
+
+Shipped from this list 2026-08-08: **cross-vendor comparison** — one org-level
+INFO finding per report reprices the whole analyzed org on the other vendor's
+nearest-equivalent tiers (`src/lib/crossVendor.ts`, imported by both engines).
+Both sides are priced from the pricing tables, never from OpenAI's billed
+`r.cost`, which has no Anthropic counterpart. It contributes zero savings by
+construction and gates itself off below $50/mo or a sub-10% delta.
 
 Shipped from this list 2026-08-06: temporal/scheduling rules (weekly-cadence
 5d/4c, steady-batch 5c with a weekend-parity gate that keeps batch advice off
