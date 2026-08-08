@@ -20,6 +20,7 @@ import {
 } from "./costing";
 import { $, P } from "@/lib/formatters";
 import { capRowSavings } from "@/lib/savingsCap";
+import { crossVendorFinding } from "@/lib/crossVendor";
 import type { OpenAIUsageData } from "./api";
 
 /* ═══════════════════ SERVICE TYPES ═══════════════════ */
@@ -850,6 +851,21 @@ export function findIssuesOpenAI(
       source: "rules",
     });
   }
+
+  /* ─── CROSS-VENDOR COMPARISON ─── */
+  // One org-level, zero-savings INFO finding: the whole workload repriced on
+  // Anthropic's nearest-equivalent tiers. Both sides are priced from the
+  // pricing tables — deliberately not from `r.cost`, which has no Anthropic
+  // counterpart. Self-gating on org spend and delta size.
+  const crossVendor = crossVendorFinding(
+    "openai",
+    rows.map((r) => ({
+      model: r.model || r.line_item || "",
+      inp: r.inp,
+      out: r.out,
+    }))
+  );
+  if (crossVendor) out.push(crossVendor);
 
   return capRowSavings(out).sort((a, b) => {
     const sv: Record<Severity, number> = {

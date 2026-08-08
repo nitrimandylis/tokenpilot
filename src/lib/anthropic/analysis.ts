@@ -28,6 +28,7 @@ import {
 } from "./costing";
 import { $, P } from "@/lib/formatters";
 import { capRowSavings } from "@/lib/savingsCap";
+import { crossVendorFinding } from "@/lib/crossVendor";
 
 /* ═══════════════════ AGGREGATION ═══════════════════ */
 
@@ -807,6 +808,13 @@ After routing, return to this view next month — you should see spend distribut
       source: "rules",
     });
   }
+
+  /* ─── CROSS-VENDOR COMPARISON ─── */
+  // One org-level, zero-savings INFO finding: the whole workload repriced on
+  // OpenAI's nearest-equivalent tiers. Self-gating — returns null when the
+  // org is too small or the two vendors land within 10% of each other.
+  const crossVendor = crossVendorFinding("anthropic", rows);
+  if (crossVendor) out.push(crossVendor);
 
   return capRowSavings(out).sort((a, b) => {
     const sv: Record<Finding["sev"], number> = {

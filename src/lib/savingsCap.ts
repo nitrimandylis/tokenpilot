@@ -9,11 +9,12 @@
 
 import type { Finding } from "@/types";
 
-// Categories where a zero-savings finding is still worth surfacing (quality
-// or organizational wins). Everything else exists to save money, so a finding
-// the cap zeroes out is noise and gets dropped.
+// Categories where a zero-savings finding is still worth surfacing (quality,
+// organizational, or informational wins — the cross-vendor comparison is
+// zero-savings by construction). Everything else exists to save money, so a
+// finding the cap zeroes out is noise and gets dropped.
 export const KEEP_ZERO_SAVINGS =
-  /upgrade|organization|workspace|project|quality/i;
+  /upgrade|organization|workspace|project|quality|cross-vendor/i;
 
 const slug = (c: string) => c.replace(/[^a-z0-9]/gi, "-").toLowerCase();
 
