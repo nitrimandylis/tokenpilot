@@ -79,6 +79,9 @@ instead of them:
   use, computed from your real token volumes
 - proposals outside the fixed category set are dropped on arrival
 - NIM down? the report degrades to rules-only with a notice. never empty
+- one catch: NVIDIA's free endpoint doesn't answer requests from datacenter
+  IPs, so the hosted demo runs rules-only — the hybrid engine needs a local
+  run (or your own `NIM_BASE_URL`)
 
 The report footer shows what the AI call itself cost next to what it found —
 the auditor audits itself.

@@ -46,12 +46,15 @@ cap; the startup demo persona's volumes were re-sized against real pricing.
 
 Next candidates, in rough order (none committed):
 
-1. **Live NIM verification on the deployed app** — the local leg passed
-   2026-08-09 (real llama-3.3-70b round-trip through the demo, hybrid
-   consensus report). The Vercel leg 504'd twice because the free NIM
-   endpoint queues far longer from datacenter IPs than from a home
-   connection; the proxy now claims the full 300s function window
-   (`maxDuration = 300`, 280s upstream wait) and awaits a retest.
+Resolved 2026-08-09: **live NIM verification** — passed locally (real
+llama-3.3-70b round-trip through the demo, hybrid consensus report). On
+Vercel the AI path is off by design: a controlled probe showed NVIDIA's
+free endpoint never answers datacenter IPs (a 2-token request got no
+response in 280s from the deployed function while the identical request
+answered in 38s from a home connection minutes later). Accepted rather
+than worked around; the hosted demo runs rules-only with the standard
+notice, and the README says so. `NIM_BASE_URL` remains the escape hatch
+for anyone hosting with a reachable OpenAI-compatible upstream.
 
 Shipped from this list 2026-08-08: **cross-vendor comparison** — one org-level
 INFO finding per report reprices the whole analyzed org on the other vendor's
