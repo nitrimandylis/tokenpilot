@@ -909,14 +909,20 @@ function HomeContent() {
                     <input
                       id="nim-toggle"
                       type="checkbox"
+                      role="switch"
                       checked={useNim}
                       onChange={(e) => toggleNim(e.target.checked)}
-                      className="h-4 w-4 accent-moss cursor-pointer"
+                      className="peer sr-only"
+                    />
+                    {/* Switch track + thumb; the real control is the hidden checkbox above */}
+                    <span
+                      aria-hidden="true"
+                      className="relative h-[18px] w-8 shrink-0 rounded-full border border-ink-border bg-ink-elevated transition-colors duration-200 peer-checked:border-moss peer-checked:bg-moss peer-focus-visible:ring-1 peer-focus-visible:ring-moss/50 peer-focus-visible:ring-offset-1 peer-focus-visible:ring-offset-ink after:absolute after:left-[2px] after:top-[2px] after:h-3 after:w-3 after:rounded-full after:bg-bone-subtle after:transition-transform after:duration-200 after:ease-[cubic-bezier(0.23,1,0.32,1)] peer-checked:after:translate-x-[14px] peer-checked:after:bg-bone motion-reduce:after:transition-none"
                     />
                     <span className="text-[11px] text-bone-subtle font-mono">
-                      {useNim
-                        ? "✓ AI augmentation on — an NVIDIA NIM model double-checks the rule engine and spots extra findings, priced from your data."
-                        : "Add AI augmentation (NVIDIA NIM) on top of the built-in rule engine."}
+                      AI augmentation (NVIDIA NIM) — a model double-checks the
+                      rule engine and spots extra findings, priced from your
+                      data.
                     </span>
                   </label>
                 )}
