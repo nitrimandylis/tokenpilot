@@ -12,6 +12,8 @@ import { useApiKey } from "@/contexts/ApiKeyContext";
 import {
   BarChart,
   Bar,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -790,6 +792,24 @@ export default function AnalyticsPage() {
     "Dec",
   ];
 
+  // One row per month: actuals carry `actual`, projections carry `projected`.
+  // The last actual month carries both so the dashed line connects to the solid one.
+  const forecastChartData = forecastResult
+    ? [
+        ...forecastResult.history.map((p, i) => ({
+          label: monthNames[p.month],
+          actual: p.spend,
+          projected:
+            i === forecastResult.history.length - 1 ? p.spend : undefined,
+        })),
+        ...forecastResult.predictions.map((p) => ({
+          label: monthNames[p.month],
+          actual: undefined,
+          projected: p.spend,
+        })),
+      ]
+    : [];
+
   return (
     <div className="space-y-8">
       {/* Header with Vendor/Org and Refresh */}
@@ -987,6 +1007,74 @@ export default function AnalyticsPage() {
             Linear projection · {forecastResult.dataPoints} months of data · R²{" "}
             {forecastResult.r2.toFixed(2)}
           </p>
+
+          <ResponsiveContainer width="100%" height={260} className="mb-4">
+            <LineChart
+              data={forecastChartData}
+              margin={{ top: 5, right: 10, left: 10, bottom: 0 }}
+            >
+              <CartesianGrid
+                strokeDasharray="3 3"
+                stroke="#2a2220"
+                vertical={false}
+              />
+              <XAxis
+                dataKey="label"
+                tick={{ fill: "#c4b8a7", fontSize: 11 }}
+                stroke="#2a2220"
+              />
+              <YAxis
+                tick={{ fill: "#c4b8a7", fontSize: 11 }}
+                stroke="#2a2220"
+                tickFormatter={(value) => $(value)}
+              />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: "#1a1614",
+                  border: "1px solid #2a2220",
+                  borderRadius: "8px",
+                  fontSize: "12px",
+                  padding: "8px 12px",
+                }}
+                labelStyle={{
+                  color: "#ede4d3",
+                  fontWeight: 600,
+                  marginBottom: "4px",
+                }}
+                itemStyle={{ color: "#c4b8a7" }}
+                cursor={{ stroke: "#2a2220" }}
+                formatter={(value) => $(typeof value === "number" ? value : 0)}
+              />
+              <Legend
+                wrapperStyle={{ fontSize: "11px", paddingTop: "8px" }}
+                iconType="plainline"
+              />
+              <Line
+                type="linear"
+                dataKey="actual"
+                name="Actual"
+                stroke="#7ead6a"
+                strokeWidth={2}
+                dot={{ r: 4, fill: "#7ead6a", strokeWidth: 0 }}
+                activeDot={{ r: 5 }}
+              />
+              <Line
+                type="linear"
+                dataKey="projected"
+                name="Projected"
+                stroke="#7ead6a"
+                strokeWidth={2}
+                strokeDasharray="5 4"
+                dot={{
+                  r: 4,
+                  fill: "#14100f",
+                  stroke: "#7ead6a",
+                  strokeWidth: 1.5,
+                }}
+                activeDot={{ r: 5 }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
 
           <div className="grid grid-cols-3 gap-3 mb-4">
             {forecastResult.predictions.map((p, i) => (

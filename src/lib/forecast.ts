@@ -7,6 +7,7 @@ export interface ForecastPoint {
 }
 
 export interface ForecastResult {
+  history: ForecastPoint[]; // the actual monthly spends the regression was fit on
   predictions: ForecastPoint[];
   slope: number; // $/month trend (positive = growing)
   r2: number; // R² coefficient 0-1
@@ -69,5 +70,11 @@ export function forecast(
     predictions.push({ year, month, spend });
   }
 
-  return { predictions, slope, r2, dataPoints: entries.length };
+  return {
+    history: entries.map(({ year, month, spend }) => ({ year, month, spend })),
+    predictions,
+    slope,
+    r2,
+    dataPoints: entries.length,
+  };
 }
