@@ -582,13 +582,14 @@ export async function findIssuesLLM(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
-      // Fail fast rather than hanging on a slow NIM model.
-      signal: AbortSignal.timeout(120_000),
+      // Outwait the proxy's own 280s upstream timeout so the server, not the
+      // browser, reports what went wrong.
+      signal: AbortSignal.timeout(290_000),
     });
   } catch (e) {
     if (e instanceof DOMException && e.name === "TimeoutError") {
       throw new Error(
-        "NIM request timed out (120s) — the model is taking too long. Retry, or set NIM_BASE_URL/NIM_MODEL to a faster NIM model."
+        "NIM request timed out (290s) — the model is taking too long. Retry, or set NIM_BASE_URL/NIM_MODEL to a faster NIM model."
       );
     }
     throw e;

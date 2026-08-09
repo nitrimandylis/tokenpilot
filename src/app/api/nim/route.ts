@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
 
+// The free NIM endpoint can queue requests for minutes (worse from datacenter
+// IPs than from home). Give the function the full Fluid-compute ceiling so the
+// upstream wait below, not the platform, decides when to give up.
+export const maxDuration = 300;
+
 // Proxies chat-completion requests to NVIDIA NIM (OpenAI-compatible). The key is
 // a server-side deployment env var (NIM_API_KEY) — never sent from the browser.
 const NIM_URL =
@@ -112,8 +117,9 @@ export async function POST(request: Request) {
           Authorization: `Bearer ${nimKey}`,
         },
         body,
-        // Bound the upstream wait so we don't hang to the 300s stream timeout.
-        signal: AbortSignal.timeout(115_000),
+        // Bound the upstream wait just under maxDuration so we return a clean
+        // 504 instead of being killed by the platform.
+        signal: AbortSignal.timeout(280_000),
       });
     } catch (e) {
       if (e instanceof DOMException && e.name === "TimeoutError") {
