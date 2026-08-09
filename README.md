@@ -147,7 +147,7 @@ flowchart LR
 | ids       | ULID                          | sortable, unique, no coordination needed             |
 
 Pre-commit: Husky + lint-staged run Prettier on everything; commitlint guards
-the messages. A vitest suite (96 tests) pins the money math — every costing
+the messages. A vitest suite (138 tests) pins the money math — every costing
 formula, the consensus merge, and the demo generators' purity. Full
 architecture notes live in `CLAUDE.md`.
 

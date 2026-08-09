@@ -25,6 +25,9 @@ Built as part of Nick's Omilia internship; doubles as a portfolio project.
   incident month) or a lean startup (1-2 minor findings, on purpose). Each
   run is internally coherent across its 6 months; the generators are pure
   and clock-free, reproducible via explicit seeds (`DEMO_SEED` in tests).
+- **Analytics**: the spend-forecast card charts actual monthly spend against
+  the regression's projection (solid vs dashed line); the forecast result
+  exposes the history it was fit on. The NIM opt-in is an animated switch.
 - 138 vitest tests pin the money math; CI runs type-check, lint, format, test.
 - AGPL-3.0.
 
@@ -43,10 +46,12 @@ cap; the startup demo persona's volumes were re-sized against real pricing.
 
 Next candidates, in rough order (none committed):
 
-1. **Live NIM verification** — the AI path has only ever run against mocked
-   responses; needs a real key and a real llama round-trip. The demo now
-   makes exactly one NIM call per run (current month only), so it doubles
-   as the cheapest live test.
+1. **Live NIM verification on the deployed app** — the local leg passed
+   2026-08-09 (real llama-3.3-70b round-trip through the demo, hybrid
+   consensus report). The Vercel leg 504'd twice because the free NIM
+   endpoint queues far longer from datacenter IPs than from a home
+   connection; the proxy now claims the full 300s function window
+   (`maxDuration = 300`, 280s upstream wait) and awaits a retest.
 
 Shipped from this list 2026-08-08: **cross-vendor comparison** — one org-level
 INFO finding per report reprices the whole analyzed org on the other vendor's
