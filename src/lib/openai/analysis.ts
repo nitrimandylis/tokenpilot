@@ -325,10 +325,6 @@ export function findIssuesOpenAI(
       }
     };
 
-    /* ─── RULE 0a: Cost-Only Analysis (when no token data) ─── */
-    // When using costs API without token breakdowns, provide basic cost insights
-    // Skip this rule - we'll handle service-specific rules below
-
     /* ─── RULE 0b: Service-Specific High-Impact Analysis ─── */
     // Only show for completions services, not audio/images/etc
     const serviceName = r.line_item || "";

@@ -11,7 +11,7 @@ Built as part of Nick's Omilia internship; doubles as a portfolio project.
 
 ## Where it stands (2026-08-06)
 
-- **24 detection rules** (10 Anthropic, 14 OpenAI) with weighted-signal
+- **23 detection rules** (9 Anthropic, 13 OpenAI, 1 cross-vendor) with weighted-signal
   confidence scoring and per-finding signal trails.
 - **Consensus engine**: optional NVIDIA NIM augmentation runs alongside the
   rules, proposes findings from a fixed category set, and never prices —

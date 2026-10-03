@@ -2,7 +2,7 @@
   "name": "tokenpilot",
   "version": "1.0.0",
   "type": "module",
-  "description": "LLM cost analysis and optimization for Anthropic API usage",
+  "description": "LLM cost analysis and optimization for Anthropic and OpenAI API usage",
   "engines": {
     "node": ">=22.0.0",
     "npm": ">=10.0.0"

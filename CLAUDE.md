@@ -43,7 +43,7 @@ Aggregation (agg/aggOpenAI)
     └─ Consolidates usage buckets by model/key/workspace
     ↓
 Analysis Engine (findIssues/findIssuesOpenAI)
-    └─ Runs the vendor's rule set (10 Anthropic / 14 OpenAI) with confidence
+    └─ Runs the vendor's rule set (9 Anthropic / 13 OpenAI, plus the cross-vendor finding) with confidence
        scoring; optional NIM consensus merges LLM proposals on top, priced
        by lib/{vendor}/costing.ts — the LLM never emits dollar figures
     ↓
@@ -78,7 +78,7 @@ History page → Detail routes → /recommendations, /analytics, /raw-data
 - Service-level analytics: tracks spending by service type (embeddings, completions, audio, images, etc.)
 - Per-project service breakdown charts showing monthly usage across all services
 
-### Analysis Engine (24 rules: 10 Anthropic, 14 OpenAI)
+### Analysis Engine (23 rules: 9 Anthropic, 13 OpenAI, 1 cross-vendor)
 
 Located in `lib/anthropic/analysis.ts` and `lib/openai/analysis.ts` — the
 `RULE n:` comment headers in those files are the authoritative list. The core
@@ -163,10 +163,10 @@ categories:
 
 **Components:**
 
-- `components/Header.tsx` - Navigation with month selector, vendor badge + org name
-- `components/tokenpilot/Row.tsx` - Recommendation card (model, savings, confidence, action)
-- `components/tokenpilot/ConfBar.tsx` - Horizontal confidence score visualization
-- `components/tokenpilot/Stat.tsx` - KPI stat cards
+- `src/components/Header.tsx` - Navigation with month selector, vendor badge + org name
+- `src/components/Row.tsx` - Recommendation card (model, savings, confidence, action)
+- `src/components/ConfBar.tsx` - Horizontal confidence score visualization
+- `src/components/Stat.tsx` - KPI stat cards
 
 ### Data Fetching Strategies
 

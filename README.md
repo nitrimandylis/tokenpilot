@@ -16,7 +16,7 @@ _an LLM spend auditor that reads your Admin API and tells you where the money le
 ![telemetry](https://img.shields.io/badge/telemetry-0-3fb950?style=flat-square&labelColor=111111)
 ![keys](https://img.shields.io/badge/your_API_keys-never_leave_the_browser-3fb950?style=flat-square&labelColor=111111)
 ![access](https://img.shields.io/badge/access-read--only._we_touch_nothing-d4a017?style=flat-square&labelColor=111111)
-![rules](https://img.shields.io/badge/detection_rules-24-d4a017?style=flat-square&labelColor=111111)
+![rules](https://img.shields.io/badge/detection_rules-23-d4a017?style=flat-square&labelColor=111111)
 ![engine](https://img.shields.io/badge/AI_augmentation-detects%2C_never_prices-3fb950?style=flat-square&labelColor=111111)
 ![savings](<https://img.shields.io/badge/savings-real._(your_CFO_may_weep)-3fb950?style=flat-square&labelColor=111111>)
 
@@ -32,7 +32,7 @@ _an LLM spend auditor that reads your Admin API and tells you where the money le
 
 Most teams discover their LLM bill the way you discover a parking ticket.
 TokenPilot reads your **Anthropic and OpenAI Admin APIs**, runs your actual
-token volumes through a **24-rule detection engine** (10 Anthropic, 14 OpenAI),
+token volumes through a **23-rule detection engine** (9 Anthropic, 13 OpenAI, 1 cross-vendor),
 and hands back confidence-scored savings recommendations in about 60 seconds.
 No theoretical benchmarks — every dollar figure is computed from _your_ usage.
 
@@ -46,6 +46,9 @@ nick@tokenpilot:~$ audit --vendor anthropic
 ```
 
 ## 🔍 The detection engine
+
+23 rules: 9 Anthropic, 13 OpenAI, 1 cross-vendor. The table groups them by what
+they catch, so its rows do not map one to one onto the 23.
 
 | #   | rule                         | what it actually catches                                       |
 | --- | ---------------------------- | -------------------------------------------------------------- |
@@ -111,6 +114,13 @@ Pick a vendor, paste the key, click **Analyze**. Then browse findings by
 severity, spend by workspace, and history by month. The key is forgotten the
 moment you close the tab — TokenPilot has the memory of a goldfish, on purpose.
 
+Optional environment variables (see `.env.local.example`):
+
+- `MOCK_API_URL` — send vendor API calls to the local mock server instead of the real APIs
+- `NIM_BASE_URL` — override the NVIDIA NIM endpoint, e.g. a self-hosted one
+- `NIM_MODEL` — override the NIM model id
+- `NIM_MOCK` — set to `1` to return synthesized NIM findings without calling NVIDIA
+
 No key handy? **Try with sample data** conjures a fresh fake org on every
 click — pick a sprawling enterprise (every rule fires, spend compounding
 month over month, one runaway-agent incident in the middle) or a lean startup
@@ -160,7 +170,10 @@ npm run build        # production build
 npm run lint         # ESLint
 npm run type-check   # tsc, no emit
 npm run format       # Prettier
+npm run format:check # Prettier, check only
 npm test             # vitest — the money math
+npm run calibrate    # confidence calibration sweep (vitest, verbose)
+npm run mock         # mock vendor API server on :3456 (needs bun)
 ```
 
 ## 🔒 Security & privacy

@@ -39,11 +39,12 @@ Query params:
 
 - `GET /api/openai/v1/organization/projects` - List projects
 - `GET /api/openai/v1/organization/usage/completions` - Completions usage
-- `GET /api/openai/v1/organization/usage/embeddings` - Embeddings usage
 - `GET /api/openai/v1/organization/usage/audio_speeches` - TTS usage
 - `GET /api/openai/v1/organization/usage/audio_transcriptions` - Whisper usage
 - `GET /api/openai/v1/organization/usage/images` - DALL-E usage
 - `GET /api/openai/v1/organization/usage/moderations` - Moderations usage
+- `GET /api/openai/v1/organization/usage/vector_stores` - Vector store usage
+- `GET /api/openai/v1/organization/usage/code_interpreter_sessions` - Code interpreter usage
 - `GET /api/openai/v1/organization/costs` - Cost breakdown
 
 Query params:
@@ -55,7 +56,7 @@ Query params:
 
 ## Data Generation
 
-The mock server generates randomized usage data designed to trigger all 6 recommendation rules:
+The mock server generates randomized usage data designed to trigger six of the app's 23 detection rules:
 
 1. **Model Downgrade** - Low output tokens (50-150 avg)
 2. **RAG Context Bloat** - High input:output ratio (>12:1)
@@ -64,4 +65,4 @@ The mock server generates randomized usage data designed to trigger all 6 recomm
 5. **Batch API Candidate** - Burst traffic patterns
 6. **Legacy Model** - Old generation models
 
-Each request generates different random scenarios, so running multiple analyses will eventually trigger all rules.
+Each request generates different random scenarios, so running multiple analyses will eventually trigger all six.

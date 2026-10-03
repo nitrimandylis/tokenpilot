@@ -534,7 +534,7 @@ export default function GuidePage() {
             </div>
             <div className="border-t border-moss/20 pt-4">
               <h4 className="text-sm font-semibold text-bone-muted mb-2">
-                Six-Rule Optimization Engine
+                Optimization Engine (23 Rules)
               </h4>
               <div className="space-y-2 text-xs text-bone-muted">
                 <div>
@@ -576,9 +576,10 @@ export default function GuidePage() {
                 </div>
               </div>
               <p className="text-xs text-bone-subtle mt-3">
-                Each rule uses temporal analysis (coefficient of variation,
-                active days, zero-day percentage) and usage signals (volume,
-                consistency, input variance) to calculate confidence scores.
+                The main rule families are listed above. Each rule uses temporal
+                analysis (coefficient of variation, active days, zero-day
+                percentage) and usage signals (volume, consistency, input
+                variance) to calculate confidence scores.
               </p>
             </div>
           </div>
